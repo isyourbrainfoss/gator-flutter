@@ -29,13 +29,12 @@ build_abi() {
 # arm64 works without NDK (CGO_ENABLED=0).
 build_abi arm64 arm64-v8a
 
-# armeabi-v7a and x86_64 require NDK-linked builds on Go 1.26+.
-if [[ -n "${ANDROID_NDK_HOME:-}" ]]; then
-  build_abi arm armeabi-v7a
-  build_abi amd64 x86_64
+# Optional ABIs need CGO + NDK. Skip unless explicitly requested.
+if [[ "${BUILD_ALL_ABIS:-}" == "1" && -n "${ANDROID_NDK_HOME:-}" ]]; then
+  build_abi arm armeabi-v7a || echo "Warning: armeabi-v7a build failed — skipping."
+  build_abi amd64 x86_64 || echo "Warning: x86_64 build failed — skipping."
 else
-  echo "Note: ANDROID_NDK_HOME not set — skipping armeabi-v7a and x86_64."
-  echo "      arm64-v8a covers most modern Android phones."
+  echo "Note: building arm64-v8a only (set BUILD_ALL_ABIS=1 + ANDROID_NDK_HOME for more)."
 fi
 
 echo "Done. Assets in $ASSETS_DIR"

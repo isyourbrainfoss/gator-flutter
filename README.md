@@ -6,26 +6,26 @@ Flutter Android port of [Gator](https://github.com/isyourbrainfoss/gator) — a 
 
 [Obtainium](https://github.com/ImranR98/Obtainium) installs APKs directly from a release source and can notify you when updates are available.
 
-### Recommended: Direct APK Link (GitHub Pages)
+### Recommended: Direct APK Link (stable mirror)
 
-GitHub Release downloads use short-lived signed URLs (`release-assets.githubusercontent.com`) that often fail on mobile with *Connection closed while receiving data*. Use the stable GitHub Pages mirror instead:
+GitHub Release downloads use short-lived signed URLs (`release-assets.githubusercontent.com`) that often fail on mobile with *Connection closed while receiving data*. Use the stable `gh-pages` mirror instead (no signed tokens):
 
 1. Install Obtainium from F-Droid, IzzyOnDroid, or its [GitHub releases](https://github.com/ImranR98/Obtainium/releases).
 2. Add app → pick **Direct APK Link** as the source (or override source if needed).
 3. Paste this URL:
 
    ```
-   https://isyourbrainfoss.github.io/gator-flutter/gator-arm64-v8a.apk
+   https://raw.githubusercontent.com/isyourbrainfoss/gator-flutter/gh-pages/gator-arm64-v8a.apk
    ```
 
 4. Tap **Get updates** / install.
 
-Obtainium detects new versions from the APK content (partial hash). You can also open the [download page](https://isyourbrainfoss.github.io/gator-flutter/) in a browser.
+Obtainium detects new versions from the APK content (partial hash). Release CI updates this file on each `v*` tag.
 
 **One-tap add (Obtainium installed):**
 
 ```
-https://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://isyourbrainfoss.github.io/gator-flutter/gator-arm64-v8a.apk
+https://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://raw.githubusercontent.com/isyourbrainfoss/gator-flutter/gh-pages/gator-arm64-v8a.apk
 ```
 
 ### Alternative: GitHub Releases

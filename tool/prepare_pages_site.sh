@@ -8,6 +8,8 @@ VERSION_CODE="${3:?version code required}"
 SITE_DIR="${4:?site output directory required}"
 
 PAGES_BASE="https://isyourbrainfoss.github.io/gator-flutter"
+# APK is served from gh-pages via raw.githubusercontent.com (stable, no signed release URLs).
+APK_URL="https://raw.githubusercontent.com/isyourbrainfoss/gator-flutter/gh-pages/gator-arm64-v8a.apk"
 
 mkdir -p "$SITE_DIR"
 cp "$APK" "$SITE_DIR/gator-arm64-v8a.apk"
@@ -21,7 +23,7 @@ cat > "$SITE_DIR/version.json" <<EOF
   "versionName": "${VERSION}",
   "versionCode": ${VERSION_CODE},
   "sha256sum": "${SHA256}",
-  "url": "${PAGES_BASE}/gator-arm64-v8a.apk",
+  "url": "${APK_URL}",
   "uploadTimestamp": ${TIMESTAMP}
 }
 EOF
@@ -42,10 +44,10 @@ cat > "$SITE_DIR/index.html" <<EOF
 <body>
   <h1>Gator ${VERSION}</h1>
   <p>Flutter Android port of <a href="https://github.com/isyourbrainfoss/gator">Gator</a> (croc file transfer).</p>
-  <p><a class="button" href="gator-arm64-v8a.apk">Download APK (arm64-v8a)</a></p>
+  <p><a class="button" href="${APK_URL}">Download APK (arm64-v8a)</a></p>
   <p>Version <strong>${VERSION}</strong> (build ${VERSION_CODE}). SHA-256: <code>${SHA256}</code></p>
   <p>Install updates via <a href="https://github.com/ImranR98/Obtainium">Obtainium</a> using Direct APK Link:</p>
-  <p><code>${PAGES_BASE}/gator-arm64-v8a.apk</code></p>
+  <p><code>${APK_URL}</code></p>
   <p><a href="https://github.com/isyourbrainfoss/gator-flutter">Source on GitHub</a></p>
 </body>
 </html>

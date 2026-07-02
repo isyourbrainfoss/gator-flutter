@@ -8,10 +8,19 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -47,19 +56,38 @@ jobs:
       - name: Build release APK (arm64 only — smaller for Obtainium)
         run: flutter build apk --release --target-platform android-arm64
 
-      - name: Prepare release asset
+      - name: Prepare release assets
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           if [ "$VERSION" = "$GITHUB_REF_NAME" ]; then
             VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
           fi
-          cp build/app/outputs/flutter-apk/app-release.apk "gator-${VERSION}-arm64-v8a.apk"
-          ls -lh "gator-${VERSION}-arm64-v8a.apk"
+          VERSION_CODE=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f2)
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          cp "$APK" "gator-${VERSION}-arm64-v8a.apk"
+          cp "$APK" gator-arm64-v8a.apk
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          ls -lh gator-*.apk
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: gator-*-arm64-v8a.apk
+          files: |
+            gator-*-arm64-v8a.apk
+            gator-arm64-v8a.apk
           generate_release_notes: true
           draft: false
           prerelease: false
+
+      - name: Prepare GitHub Pages site
+        run: bash tool/prepare_pages_site.sh gator-arm64-v8a.apk "$VERSION" "$VERSION_CODE" site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

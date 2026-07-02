@@ -1,0 +1,74 @@
+name: Mirror APK to GitHub Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to mirror (e.g. v1.5.1). Leave empty for latest.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG=$(gh api repos/${{ github.repository }}/releases/latest --jq .tag_name)
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Mirroring release $TAG"
+
+      - name: Download release APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          ASSET=$(gh api "repos/${{ github.repository }}/releases/tags/${TAG}" \
+            --jq '.assets[] | select(.name | test("arm64-v8a\\.apk$")) | .name' | head -1)
+          if [ -z "$ASSET" ]; then
+            echo "No arm64-v8a APK found on $TAG" >&2
+            exit 1
+          fi
+          gh release download "$TAG" --repo "${{ github.repository }}" --pattern "$ASSET" --dir .
+          cp "$ASSET" gator-release.apk
+          VERSION="${TAG#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "ASSET=$ASSET" >> "$GITHUB_ENV"
+
+      - name: Read version code from APK
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq aapt >/dev/null
+          VC=$(aapt dump badging gator-release.apk | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")
+          echo "VERSION_CODE=$VC" >> "$GITHUB_ENV"
+
+      - name: Prepare Pages site
+        run: bash tool/prepare_pages_site.sh gator-release.apk "$VERSION" "$VERSION_CODE" site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

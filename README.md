@@ -4,32 +4,47 @@ Flutter Android port of [Gator](https://github.com/isyourbrainfoss/gator) — a 
 
 ## Install on Android (Obtainium)
 
-[Obtainium](https://github.com/ImranR98/Obtainium) installs APKs directly from GitHub Releases and can notify you when updates are available.
+[Obtainium](https://github.com/ImranR98/Obtainium) installs APKs directly from a release source and can notify you when updates are available.
+
+### Recommended: Direct APK Link (GitHub Pages)
+
+GitHub Release downloads use short-lived signed URLs (`release-assets.githubusercontent.com`) that often fail on mobile with *Connection closed while receiving data*. Use the stable GitHub Pages mirror instead:
 
 1. Install Obtainium from F-Droid, IzzyOnDroid, or its [GitHub releases](https://github.com/ImranR98/Obtainium/releases).
-2. Add this app using the repository URL:
+2. Add app → pick **Direct APK Link** as the source (or override source if needed).
+3. Paste this URL:
 
    ```
-   https://github.com/isyourbrainfoss/gator-flutter
+   https://isyourbrainfoss.github.io/gator-flutter/gator-arm64-v8a.apk
    ```
 
-3. Obtainium should auto-detect **GitHub** as the source. Use this APK filter (arm64-only, ~25 MB):
+4. Tap **Get updates** / install.
 
-   ```
-   gator-.*-arm64-v8a\.apk
-   ```
+Obtainium detects new versions from the APK content (partial hash). You can also open the [download page](https://isyourbrainfoss.github.io/gator-flutter/) in a browser.
 
-4. Tap **Get updates** / install the latest release APK.
-
-   If a download fails with *Connection closed*, retry on Wi‑Fi or pick the latest `arm64-v8a` asset (not the older ~70 MB universal APK on v1.5.0).
-
-**One-tap add (Obtainium installed):** open this link on your phone:
+**One-tap add (Obtainium installed):**
 
 ```
-https://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://github.com/isyourbrainfoss/gator-flutter
+https://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://isyourbrainfoss.github.io/gator-flutter/gator-arm64-v8a.apk
 ```
 
-Releases are published when a `v*` tag is pushed (for example `v1.5.1`). Each release includes `gator-<version>-arm64-v8a.apk` (arm64 phones only).
+### Alternative: GitHub Releases
+
+If Pages works but you prefer GitHub as the source:
+
+```
+https://github.com/isyourbrainfoss/gator-flutter
+```
+
+APK filter (arm64-only, ~39 MB):
+
+```
+gator-.*-arm64-v8a\.apk
+```
+
+Or use the stable release asset name: `gator-arm64-v8a.apk`.
+
+Releases are published when a `v*` tag is pushed (for example `v1.5.1`). Each release includes `gator-<version>-arm64-v8a.apk` and updates the Pages mirror (arm64 phones only).
 
 ## Development
 

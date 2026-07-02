@@ -1,0 +1,32 @@
+name: gator
+description: Flutter Android frontend for croc — encrypted P2P file transfer.
+publish_to: 'none'
+version: 1.5.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_riverpod: ^2.6.1
+  shared_preferences: ^2.5.3
+  path_provider: ^2.1.5
+  file_picker: ^10.1.9
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.0.1
+  image_picker: ^1.1.2
+  permission_handler: ^12.0.0+1
+  url_launcher: ^6.3.1
+  open_filex: ^4.7.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/croc/arm64-v8a/croc

@@ -13,13 +13,15 @@ Flutter Android port of [Gator](https://github.com/isyourbrainfoss/gator) — a 
    https://github.com/isyourbrainfoss/gator-flutter
    ```
 
-3. Obtainium should auto-detect **GitHub** as the source. Keep the default APK filter (`.*\.apk`) or use:
+3. Obtainium should auto-detect **GitHub** as the source. Use this APK filter (arm64-only, ~25 MB):
 
    ```
-   gator-.*-android\.apk
+   gator-.*-arm64-v8a\.apk
    ```
 
 4. Tap **Get updates** / install the latest release APK.
+
+   If a download fails with *Connection closed*, retry on Wi‑Fi or pick the latest `arm64-v8a` asset (not the older ~70 MB universal APK on v1.5.0).
 
 **One-tap add (Obtainium installed):** open this link on your phone:
 
@@ -27,7 +29,7 @@ Flutter Android port of [Gator](https://github.com/isyourbrainfoss/gator) — a 
 https://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://github.com/isyourbrainfoss/gator-flutter
 ```
 
-Releases are published when a `v*` tag is pushed (for example `v1.5.0`). Each release includes `gator-<version>-android.apk`.
+Releases are published when a `v*` tag is pushed (for example `v1.5.1`). Each release includes `gator-<version>-arm64-v8a.apk` (arm64 phones only).
 
 ## Development
 

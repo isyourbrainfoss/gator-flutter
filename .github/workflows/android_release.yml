@@ -44,8 +44,8 @@ jobs:
       - name: Test
         run: flutter test
 
-      - name: Build release APK
-        run: flutter build apk --release
+      - name: Build release APK (arm64 only — smaller for Obtainium)
+        run: flutter build apk --release --target-platform android-arm64
 
       - name: Prepare release asset
         run: |
@@ -53,12 +53,13 @@ jobs:
           if [ "$VERSION" = "$GITHUB_REF_NAME" ]; then
             VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
           fi
-          cp build/app/outputs/flutter-apk/app-release.apk "gator-${VERSION}-android.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "gator-${VERSION}-arm64-v8a.apk"
+          ls -lh "gator-${VERSION}-arm64-v8a.apk"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: gator-*-android.apk
+          files: gator-*-arm64-v8a.apk
           generate_release_notes: true
           draft: false
           prerelease: false

@@ -8,6 +8,8 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import android.system.Os
+import android.system.OsConstants
 import java.io.File
 import java.io.FileOutputStream
 
@@ -24,6 +26,39 @@ class MainActivity : FlutterActivity() {
                     result.success(Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a")
                 } else {
                     result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CROC_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getExecutableDir" -> {
+                        val binDir = File(codeCacheDir, "bin")
+                        if (!binDir.exists()) binDir.mkdirs()
+                        result.success(binDir.absolutePath)
+                    }
+                    "setExecutable" -> {
+                        val path = call.argument<String>("path")
+                        if (path.isNullOrBlank()) {
+                            result.error("ARG", "path required", null)
+                            return@setMethodCallHandler
+                        }
+                        val file = File(path)
+                        if (!file.exists()) {
+                            result.error("ENOENT", "file not found: $path", null)
+                            return@setMethodCallHandler
+                        }
+                        val ok = file.setExecutable(true, false)
+                        if (ok) {
+                            try {
+                                Os.chmod(path, OsConstants.S_IRWXU or OsConstants.S_IRGRP or OsConstants.S_IXGRP)
+                            } catch (_: Exception) {
+                                // setExecutable succeeded; chmod is best-effort.
+                            }
+                        }
+                        result.success(ok)
+                    }
+                    else -> result.notImplemented()
                 }
             }
 
@@ -129,6 +164,7 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val ABI_CHANNEL = "org.gator.gator/abi"
+        private const val CROC_CHANNEL = "org.gator.gator/croc"
         private const val SHARE_METHOD_CHANNEL = "org.gator.gator/share"
         private const val SHARE_EVENT_CHANNEL = "org.gator.gator/share/events"
     }

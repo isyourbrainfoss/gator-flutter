@@ -23,8 +23,10 @@ class CrocMissingPage extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'The croc command-line tool is required to use this app.\n'
-                'Please reinstall or rebuild with bundled croc assets.',
+                'Gator bundles croc inside the app (a separate Termux install '
+                'cannot be used due to Android sandboxing).\n\n'
+                'The bundled binary failed to start. Try reinstalling from '
+                'Obtainium, or report an issue if this persists.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,

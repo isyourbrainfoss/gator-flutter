@@ -35,13 +35,14 @@ class CrocBinaryLocator {
 
     try {
       final bytes = await rootBundle.load(assetPath);
-      final dir = await getApplicationSupportDirectory();
+      final dir = Directory(await _androidExecutableDir());
+      if (!await dir.exists()) await dir.create(recursive: true);
       final crocFile = File('${dir.path}/croc');
       await crocFile.writeAsBytes(
         bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
         flush: true,
       );
-      await Process.run('chmod', ['+x', crocFile.path]);
+      await _makeExecutable(crocFile.path);
       _cachedPath = crocFile.path;
       return _cachedPath;
     } on FlutterError {
@@ -94,5 +95,32 @@ class CrocBinaryLocator {
       // Fall through.
     }
     return 'arm64-v8a';
+  }
+
+  /// codeCacheDir is required on Android so extracted binaries can be executed.
+  Future<String> _androidExecutableDir() async {
+    const channel = MethodChannel('org.gator.gator/croc');
+    try {
+      final dir = await channel.invokeMethod<String>('getExecutableDir');
+      if (dir != null && dir.isNotEmpty) return dir;
+    } catch (_) {
+      // Fall through.
+    }
+    return (await getApplicationSupportDirectory()).path;
+  }
+
+  Future<void> _makeExecutable(String path) async {
+    if (!Platform.isAndroid) {
+      await Process.run('chmod', ['+x', path]);
+      return;
+    }
+    const channel = MethodChannel('org.gator.gator/croc');
+    try {
+      final ok = await channel.invokeMethod<bool>('setExecutable', {'path': path});
+      if (ok == true) return;
+    } catch (_) {
+      // Fall through.
+    }
+    await Process.run('chmod', ['+x', path]);
   }
 }

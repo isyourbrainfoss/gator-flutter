@@ -22,6 +22,8 @@ GitHub Release downloads use short-lived signed URLs (`release-assets.githubuser
 
 Obtainium detects new versions from the APK content (partial hash). Release CI updates this file on each `v*` tag.
 
+**“App conflict” on update:** releases before v1.5.3 were signed with ephemeral CI debug keys, so Android blocks in-place updates. Uninstall the old Gator, then install again from Obtainium (your settings are not preserved). v1.5.3+ uses a stable release key so future updates work normally.
+
 **One-tap add (Obtainium installed):**
 
 ```

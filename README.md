@@ -6,28 +6,43 @@ Flutter Android port of [Gator](https://github.com/isyourbrainfoss/gator) — a 
 
 [Obtainium](https://github.com/ImranR98/Obtainium) installs APKs directly from a release source and can notify you when updates are available.
 
-### Recommended: Direct APK Link (stable mirror)
+### Recommended: Standard JSON (stable mirror)
 
-GitHub Release downloads use short-lived signed URLs (`release-assets.githubusercontent.com`) that often fail on mobile with *Connection closed while receiving data*. Use the stable `gh-pages` mirror instead (no signed tokens):
+GitHub Release asset URLs (`release-assets.githubusercontent.com`) often fail on phones with *Connection closed while receiving data*. Use the `gh-pages` mirror instead.
 
 1. Install Obtainium from F-Droid, IzzyOnDroid, or its [GitHub releases](https://github.com/ImranR98/Obtainium/releases).
-2. Add app → pick **Direct APK Link** as the source (or override source if needed).
+2. **Add app** → source type **Direct APK Link** (Obtainium auto-detects JSON).
 3. Paste this URL:
 
    ```
-   https://raw.githubusercontent.com/isyourbrainfoss/gator-flutter/gh-pages/gator-arm64-v8a.apk
+   https://raw.githubusercontent.com/isyourbrainfoss/gator-flutter/gh-pages/version.json
    ```
 
 4. Tap **Get updates** / install.
 
-Obtainium detects new versions from the APK content (partial hash). Release CI updates this file on each `v*` tag.
-
-**“App conflict” on update:** releases before v1.5.3 were signed with ephemeral CI debug keys, so Android blocks in-place updates. Uninstall the old Gator, then install again from Obtainium (your settings are not preserved). v1.5.3+ uses a stable release key so future updates work normally.
+`version.json` includes `versionCode`, `sha256sum`, and the APK URL. CI refreshes it on each `v*` tag.
 
 **One-tap add (Obtainium installed):**
 
 ```
-https://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://raw.githubusercontent.com/isyourbrainfoss/gator-flutter/gh-pages/gator-arm64-v8a.apk
+https://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://raw.githubusercontent.com/isyourbrainfoss/gator-flutter/gh-pages/version.json
+```
+
+### Troubleshooting Obtainium updates
+
+| Symptom | Fix |
+|---------|-----|
+| **“App not installed” / “App conflict” / signature error** | You have a build signed before v1.5.3 (ephemeral CI keys). **Uninstall Gator**, then install fresh from Obtainium. Settings are not preserved. v1.5.3+ uses one stable release key — updates after that work in-place. |
+| **“No updates found”** but you expect a new release | Pull to refresh in Obtainium. Confirm [version.json](https://raw.githubusercontent.com/isyourbrainfoss/gator-flutter/gh-pages/version.json) shows a higher `versionCode` than your installed app (Settings → About in Gator, or Obtainium app details). |
+| **Download fails / connection closed** | Do not use GitHub Release asset URLs on mobile. Use `version.json` above, not `github.com/.../releases/download/...`. |
+| **Still on an old Obtainium entry** | Remove the app in Obtainium, re-add using the `version.json` URL (not the bare `.apk` link). |
+
+### Alternative: Direct APK Link
+
+If JSON does not work in your Obtainium version:
+
+```
+https://raw.githubusercontent.com/isyourbrainfoss/gator-flutter/gh-pages/gator-arm64-v8a.apk
 ```
 
 ### Alternative: GitHub Releases

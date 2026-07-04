@@ -10,6 +10,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:gator/features/receive/receive_controller.dart';
 import 'package:gator/features/receive/receive_notifier.dart';
 import 'package:gator/services/folder_opener.dart';
+import 'package:gator/services/qr_scanner_service.dart';
 import 'package:gator/widgets/adaptive_buttons.dart';
 import 'package:gator/widgets/gator_snackbar.dart';
 import 'package:gator/widgets/transfer_progress_card.dart';
@@ -215,10 +216,13 @@ class _ReceivePageState extends ConsumerState<ReceivePage> {
   }
 
   Future<void> _scanCamera(BuildContext context, ReceiveNotifier notifier) async {
-    final code = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(builder: (_) => const _QrScannerPage()),
-    );
+    String? code = await QrScannerService.scanCamera();
+    if (code == null && context.mounted) {
+      code = await Navigator.push<String>(
+        context,
+        MaterialPageRoute(builder: (_) => const _QrScannerPage()),
+      );
+    }
     if (code != null) {
       _codeController.text = code;
       notifier.pasteCode(code);

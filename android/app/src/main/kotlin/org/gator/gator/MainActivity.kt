@@ -7,6 +7,8 @@ import android.os.Build
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import android.util.Log
+import androidx.activity.result.contract.ActivityResultContracts
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -22,7 +24,24 @@ import java.nio.charset.StandardCharsets
 class MainActivity : FlutterFragmentActivity() {
     private var shareSink: EventChannel.EventSink? = null
     private var pendingShare: Map<String, Any?>? = null
+    private var pendingQrResult: MethodChannel.Result? = null
     private lateinit var crocRunner: CrocRunner
+
+    private val qrScanLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { activityResult ->
+        val callback = pendingQrResult
+        pendingQrResult = null
+        if (callback == null) return@registerForActivityResult
+
+        if (activityResult.resultCode == RESULT_OK) {
+            callback.success(
+                activityResult.data?.getStringExtra(QrScannerActivity.EXTRA_RESULT),
+            )
+        } else {
+            callback.success(null)
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -118,6 +137,22 @@ class MainActivity : FlutterFragmentActivity() {
                         } else {
                             result.success(openDirectory(path))
                         }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, QR_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "scanQrCode" -> {
+                        if (pendingQrResult != null) {
+                            result.error("BUSY", "QR scanner already open", null)
+                            return@setMethodCallHandler
+                        }
+                        pendingQrResult = result
+                        Log.i(TAG, "Launching native QR scanner")
+                        qrScanLauncher.launch(Intent(this, QrScannerActivity::class.java))
                     }
                     else -> result.notImplemented()
                 }
@@ -260,10 +295,12 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     companion object {
+        private const val TAG = "GatorMainActivity"
         private const val ABI_CHANNEL = "org.gator.gator/abi"
         private const val CROC_CHANNEL = "org.gator.gator/croc"
         private const val SHARE_METHOD_CHANNEL = "org.gator.gator/share"
         private const val SHARE_EVENT_CHANNEL = "org.gator.gator/share/events"
         private const val FILES_CHANNEL = "org.gator.gator/files"
+        private const val QR_CHANNEL = "org.gator.gator/qr"
     }
 }

@@ -1,10 +1,13 @@
 package org.gator.gator
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
@@ -12,8 +15,11 @@ import android.system.Os
 import android.system.OsConstants
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private var shareSink: EventChannel.EventSink? = null
     private var pendingShare: Map<String, Any?>? = null
     private lateinit var crocRunner: CrocRunner
@@ -102,7 +108,84 @@ class MainActivity : FlutterActivity() {
                 }
             })
 
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, FILES_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "openDirectory" -> {
+                        val path = call.argument<String>("path")
+                        if (path.isNullOrBlank()) {
+                            result.error("ARG", "path required", null)
+                        } else {
+                            result.success(openDirectory(path))
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
         handleShareIntent(intent)
+    }
+
+    private fun openDirectory(path: String): Boolean {
+        val directory = File(path)
+        if (!directory.exists()) {
+            directory.mkdirs()
+        }
+        if (!directory.isDirectory) {
+            return false
+        }
+
+        val documentUri = pathToDocumentUri(path) ?: return false
+
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(documentUri, DocumentsContract.Document.MIME_TYPE_DIR)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                putExtra(DocumentsContract.EXTRA_INITIAL_URI, documentUri)
+            }
+        }
+
+        return try {
+            startActivity(Intent.createChooser(intent, null))
+            true
+        } catch (_: ActivityNotFoundException) {
+            false
+        }
+    }
+
+    private fun pathToDocumentUri(path: String): Uri? {
+        val canonical = try {
+            File(path).canonicalPath
+        } catch (_: IOException) {
+            path
+        }
+
+        val storageRoot = try {
+            Environment.getExternalStorageDirectory().canonicalPath
+        } catch (_: IOException) {
+            return null
+        }
+
+        if (!canonical.startsWith(storageRoot)) {
+            return null
+        }
+
+        val relative = canonical
+            .removePrefix(storageRoot)
+            .removePrefix("/")
+        if (relative.isEmpty()) {
+            return DocumentsContract.buildDocumentUri(
+                "com.android.externalstorage.documents",
+                "primary:",
+            )
+        }
+
+        val encoded = relative.split("/").joinToString("%2F") { segment ->
+            URLEncoder.encode(segment, StandardCharsets.UTF_8.name()).replace("+", "%20")
+        }
+        return Uri.parse(
+            "content://com.android.externalstorage.documents/document/primary:$encoded",
+        )
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -181,5 +264,6 @@ class MainActivity : FlutterActivity() {
         private const val CROC_CHANNEL = "org.gator.gator/croc"
         private const val SHARE_METHOD_CHANNEL = "org.gator.gator/share"
         private const val SHARE_EVENT_CHANNEL = "org.gator.gator/share/events"
+        private const val FILES_CHANNEL = "org.gator.gator/files"
     }
 }

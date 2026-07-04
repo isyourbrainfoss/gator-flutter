@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:open_filex/open_filex.dart';
-
 import 'package:gator/features/dialogs/received_text_dialog.dart';
 import 'package:gator/features/dialogs/transfer_complete_dialog.dart';
 import 'package:gator/features/receive/receive_notifier.dart';
@@ -11,6 +9,7 @@ import 'package:gator/models/transfer_state.dart';
 import 'package:gator/providers/settings_provider.dart';
 import 'package:gator/providers/transfer_providers.dart';
 import 'package:gator/services/croc_transfer_service.dart';
+import 'package:gator/services/folder_opener.dart';
 
 /// Wires [ReceiveNotifier] to [CrocTransferService].
 class ReceiveController {
@@ -51,7 +50,7 @@ class ReceiveController {
           if (context.mounted) {
             final open = await showTransferCompleteDialog(context);
             if (open && context.mounted) {
-              await OpenFilex.open(state.saveDir);
+              await FolderOpener.open(state.saveDir);
             }
           }
         case CrocFinishedEvent(:final exitCode):

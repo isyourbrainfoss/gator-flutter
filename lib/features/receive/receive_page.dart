@@ -1,14 +1,15 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import 'package:gator/features/receive/receive_controller.dart';
 import 'package:gator/features/receive/receive_notifier.dart';
+import 'package:gator/services/folder_opener.dart';
 import 'package:gator/widgets/adaptive_buttons.dart';
 import 'package:gator/widgets/gator_snackbar.dart';
 import 'package:gator/widgets/transfer_progress_card.dart';
@@ -207,28 +208,13 @@ class _ReceivePageState extends ConsumerState<ReceivePage> {
   }
 
   Future<void> _openFolder(String path) async {
-    await OpenFilex.open(path);
-  }
-
-  Future<bool> _ensureCameraPermission(BuildContext context) async {
-    var status = await Permission.camera.status;
-    if (status.isGranted) return true;
-    status = await Permission.camera.request();
-    if (status.isGranted) return true;
-    if (context.mounted) {
-      showGatorSnackBar(
-        context,
-        status.isPermanentlyDenied
-            ? 'Camera permission denied — enable it in system settings'
-            : 'Camera permission is required to scan QR codes',
-      );
+    final opened = await FolderOpener.open(path);
+    if (!opened && mounted) {
+      showGatorSnackBar(context, 'Could not open folder');
     }
-    return false;
   }
 
   Future<void> _scanCamera(BuildContext context, ReceiveNotifier notifier) async {
-    if (!await _ensureCameraPermission(context)) return;
-    if (!context.mounted) return;
     final code = await Navigator.push<String>(
       context,
       MaterialPageRoute(builder: (_) => const _QrScannerPage()),
@@ -270,16 +256,63 @@ class _QrScannerPage extends StatefulWidget {
   State<_QrScannerPage> createState() => _QrScannerPageState();
 }
 
-class _QrScannerPageState extends State<_QrScannerPage> {
-  final MobileScannerController _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
-    facing: CameraFacing.back,
-  );
+class _QrScannerPageState extends State<_QrScannerPage>
+    with WidgetsBindingObserver {
+  late final MobileScannerController _controller;
+  StreamSubscription<Object?>? _subscription;
   bool _found = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _controller = MobileScannerController(
+      autoStart: false,
+      detectionSpeed: DetectionSpeed.noDuplicates,
+      facing: CameraFacing.back,
+      formats: const [BarcodeFormat.qrCode],
+    );
+    _subscription = _controller.barcodes.listen(_onDetect);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startScanner());
+  }
+
+  Future<void> _startScanner() async {
+    try {
+      await _controller.start();
+    } on MobileScannerException {
+      // Error state is surfaced by the controller / errorBuilder.
+    }
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_found) return;
+    final code = capture.barcodes.firstOrNull?.rawValue;
+    if (code != null && code.isNotEmpty) {
+      _found = true;
+      Navigator.pop(context, code);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_controller.value.hasCameraPermission) return;
+
+    switch (state) {
+      case AppLifecycleState.resumed:
+        unawaited(_startScanner());
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        unawaited(_controller.stop());
+    }
+  }
+
+  @override
   void dispose() {
-    _controller.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_subscription?.cancel());
+    unawaited(_controller.dispose());
     super.dispose();
   }
 
@@ -289,19 +322,12 @@ class _QrScannerPageState extends State<_QrScannerPage> {
       appBar: AppBar(title: const Text('Scan QR Code')),
       body: MobileScanner(
         controller: _controller,
-        onDetect: (capture) {
-          if (_found) return;
-          final code = capture.barcodes.firstOrNull?.rawValue;
-          if (code != null && code.isNotEmpty) {
-            _found = true;
-            Navigator.pop(context, code);
-          }
-        },
+        useAppLifecycleState: false,
         errorBuilder: (context, error) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
-              'Camera error: ${error.errorCode.name}',
+              error.errorDetails?.message ?? error.errorCode.message,
               textAlign: TextAlign.center,
             ),
           ),

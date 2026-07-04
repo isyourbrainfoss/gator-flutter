@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:gator/core/constants.dart';
 
 final _progressRe = RegExp(r'(\d{1,3})%');
@@ -169,6 +171,14 @@ List<String> buildGlobalArgs(Map<String, dynamic> settings) {
 
   final throttleUpload = (settings['throttle_upload'] as String? ?? '').trim();
   if (throttleUpload.isNotEmpty) args.addAll(['--throttleUpload', throttleUpload]);
+
+  if (Platform.isAndroid) {
+    args.add('--ignore-stdin');
+    // Android system DNS often fails croc relay lookups; bundled resolver fixes it.
+    if (settings['internal_dns'] != false) {
+      args.add('--internal-dns');
+    }
+  }
 
   return args;
 }

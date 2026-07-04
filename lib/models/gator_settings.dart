@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:gator/core/constants.dart';
 
 /// Canonical default settings (ported from Gator settings.py DEFAULTS).
@@ -40,6 +42,9 @@ const Map<String, dynamic> gatorDefaults = {
 /// Merge user overrides with defaults without mutating the input.
 Map<String, dynamic> mergeWithDefaults(Map<String, dynamic> settings) {
   final merged = Map<String, dynamic>.from(gatorDefaults);
+  if (Platform.isAndroid && !settings.containsKey('internal_dns')) {
+    merged['internal_dns'] = true;
+  }
   for (final entry in settings.entries) {
     if (gatorDefaults.containsKey(entry.key)) {
       merged[entry.key] = entry.value;
@@ -92,6 +97,9 @@ Map<String, dynamic> migrateStaleSettings(Map<String, dynamic> settings) {
   if (s['curve'] == crocDefaultCurve) s['curve'] = '';
   if (s['port'] == crocDefaultPort) s['port'] = 0;
   if (s['transfers'] == crocDefaultTransfers) s['transfers'] = 0;
+  if (Platform.isAndroid && s['internal_dns'] != true) {
+    s['internal_dns'] = true;
+  }
   return s;
 }
 

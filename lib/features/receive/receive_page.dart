@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'package:gator/features/receive/receive_controller.dart';
 import 'package:gator/features/receive/receive_notifier.dart';
@@ -209,7 +210,25 @@ class _ReceivePageState extends ConsumerState<ReceivePage> {
     await OpenFilex.open(path);
   }
 
+  Future<bool> _ensureCameraPermission(BuildContext context) async {
+    var status = await Permission.camera.status;
+    if (status.isGranted) return true;
+    status = await Permission.camera.request();
+    if (status.isGranted) return true;
+    if (context.mounted) {
+      showGatorSnackBar(
+        context,
+        status.isPermanentlyDenied
+            ? 'Camera permission denied — enable it in system settings'
+            : 'Camera permission is required to scan QR codes',
+      );
+    }
+    return false;
+  }
+
   Future<void> _scanCamera(BuildContext context, ReceiveNotifier notifier) async {
+    if (!await _ensureCameraPermission(context)) return;
+    if (!context.mounted) return;
     final code = await Navigator.push<String>(
       context,
       MaterialPageRoute(builder: (_) => const _QrScannerPage()),
@@ -234,6 +253,10 @@ class _ReceivePageState extends ConsumerState<ReceivePage> {
       } else if (context.mounted) {
         showGatorSnackBar(context, 'No QR code found in image');
       }
+    } catch (e) {
+      if (context.mounted) {
+        showGatorSnackBar(context, 'Could not read QR from image');
+      }
     } finally {
       await controller.dispose();
     }
@@ -248,21 +271,41 @@ class _QrScannerPage extends StatefulWidget {
 }
 
 class _QrScannerPageState extends State<_QrScannerPage> {
+  final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    facing: CameraFacing.back,
+  );
   bool _found = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Scan QR Code')),
       body: MobileScanner(
+        controller: _controller,
         onDetect: (capture) {
           if (_found) return;
           final code = capture.barcodes.firstOrNull?.rawValue;
-          if (code != null) {
+          if (code != null && code.isNotEmpty) {
             _found = true;
             Navigator.pop(context, code);
           }
         },
+        errorBuilder: (context, error) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Camera error: ${error.errorCode.name}',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
       ),
     );
   }

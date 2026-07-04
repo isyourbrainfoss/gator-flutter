@@ -32,6 +32,9 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CROC_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "getCrocPath" -> {
+                        result.success(packagedCrocPath())
+                    }
                     "getExecutableDir" -> {
                         val binDir = File(codeCacheDir, "bin")
                         if (!binDir.exists()) binDir.mkdirs()
@@ -95,6 +98,12 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleShareIntent(intent)
+    }
+
+    /** Packaged arm64 croc in jniLibs — executable from nativeLibraryDir. */
+    private fun packagedCrocPath(): String? {
+        val file = File(applicationInfo.nativeLibraryDir, "libcroc.so")
+        return if (file.exists() && file.length() > 0L) file.absolutePath else null
     }
 
     private fun handleShareIntent(intent: Intent?) {

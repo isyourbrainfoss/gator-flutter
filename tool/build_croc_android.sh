@@ -22,8 +22,14 @@ build_abi() {
   local abi_dir="$2"
   echo "Building croc for android/$goarch → $abi_dir"
   mkdir -p "$ASSETS_DIR/$abi_dir"
+  local jni_dir="$ROOT_DIR/android/app/src/main/jniLibs/$abi_dir"
+  mkdir -p "$jni_dir"
   GOOS=android GOARCH="$goarch" CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" \
     -o "$ASSETS_DIR/$abi_dir/croc" .
+  # Android can execute packaged native libs from nativeLibraryDir; extracted
+  # assets in codeCacheDir are blocked on many devices (W^X / SELinux).
+  cp "$ASSETS_DIR/$abi_dir/croc" "$jni_dir/libcroc.so"
+  chmod +x "$jni_dir/libcroc.so"
 }
 
 # arm64 works without NDK (CGO_ENABLED=0).

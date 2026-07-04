@@ -2,20 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 
-/// Locates and extracts the bundled croc binary for the current Android ABI.
+/// Locates the bundled croc binary for the current platform.
 class CrocBinaryLocator {
   CrocBinaryLocator({this._cachedPath});
 
   String? _cachedPath;
-
-  static const _assetMap = {
-    'arm64': 'assets/croc/arm64-v8a/croc',
-    'arm64-v8a': 'assets/croc/arm64-v8a/croc',
-    'x86_64': 'assets/croc/x86_64/croc',
-    'armeabi-v7a': 'assets/croc/armeabi-v7a/croc',
-  };
 
   /// Returns the path to an executable croc binary, or null if unavailable.
   Future<String?> locate() async {
@@ -24,32 +16,22 @@ class CrocBinaryLocator {
     if (kIsWeb) return null;
 
     if (!Platform.isAndroid) {
-      // Desktop dev: resolve full path (GUI apps often have minimal PATH).
       final resolved = await _resolveDesktopCroc();
       return _cachedPath = resolved;
     }
 
-    final abi = await _currentAbi();
-    final assetPath = _assetMap[abi] ?? _assetMap['arm64-v8a'];
-    if (assetPath == null) return null;
-
+    // jniLibs/libcroc.so — Android allows executing native libs from
+    // nativeLibraryDir; extracted Flutter assets are blocked on many phones.
+    const channel = MethodChannel('org.gator.gator/croc');
     try {
-      final bytes = await rootBundle.load(assetPath);
-      final dir = Directory(await _androidExecutableDir());
-      if (!await dir.exists()) await dir.create(recursive: true);
-      final crocFile = File('${dir.path}/croc');
-      await crocFile.writeAsBytes(
-        bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
-        flush: true,
-      );
-      await _makeExecutable(crocFile.path);
-      _cachedPath = crocFile.path;
-      return _cachedPath;
-    } on FlutterError {
-      return null;
+      final path = await channel.invokeMethod<String>('getCrocPath');
+      if (path != null && path.isNotEmpty && await File(path).exists()) {
+        return _cachedPath = path;
+      }
     } catch (_) {
-      return null;
+      // Fall through.
     }
+    return null;
   }
 
   /// Verify croc runs and return version string, or null on failure.
@@ -59,8 +41,11 @@ class CrocBinaryLocator {
     try {
       final result = await Process.run(path, ['--version']);
       if (result.exitCode == 0) {
-        return (result.stdout as String).trim();
+        final out = (result.stdout as String).trim();
+        if (out.isNotEmpty) return out;
       }
+      final err = (result.stderr as String).trim();
+      if (err.isNotEmpty) return err;
     } catch (_) {
       return null;
     }
@@ -84,43 +69,5 @@ class CrocBinaryLocator {
       }
     } catch (_) {}
     return 'croc';
-  }
-
-  Future<String> _currentAbi() async {
-    const channel = MethodChannel('org.gator.gator/abi');
-    try {
-      final abi = await channel.invokeMethod<String>('getAbi');
-      if (abi != null && abi.isNotEmpty) return abi;
-    } catch (_) {
-      // Fall through.
-    }
-    return 'arm64-v8a';
-  }
-
-  /// codeCacheDir is required on Android so extracted binaries can be executed.
-  Future<String> _androidExecutableDir() async {
-    const channel = MethodChannel('org.gator.gator/croc');
-    try {
-      final dir = await channel.invokeMethod<String>('getExecutableDir');
-      if (dir != null && dir.isNotEmpty) return dir;
-    } catch (_) {
-      // Fall through.
-    }
-    return (await getApplicationSupportDirectory()).path;
-  }
-
-  Future<void> _makeExecutable(String path) async {
-    if (!Platform.isAndroid) {
-      await Process.run('chmod', ['+x', path]);
-      return;
-    }
-    const channel = MethodChannel('org.gator.gator/croc');
-    try {
-      final ok = await channel.invokeMethod<bool>('setExecutable', {'path': path});
-      if (ok == true) return;
-    } catch (_) {
-      // Fall through.
-    }
-    await Process.run('chmod', ['+x', path]);
   }
 }

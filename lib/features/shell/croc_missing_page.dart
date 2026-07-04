@@ -25,8 +25,9 @@ class CrocMissingPage extends StatelessWidget {
               Text(
                 'Gator bundles croc inside the app (a separate Termux install '
                 'cannot be used due to Android sandboxing).\n\n'
-                'The bundled binary failed to start. Try reinstalling from '
-                'Obtainium, or report an issue if this persists.',
+                'The transfer engine could not start on this device. '
+                'Update to the latest version via Obtainium, or report an '
+                'issue if this persists after updating.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,

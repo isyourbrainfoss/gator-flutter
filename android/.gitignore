@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Built by tool/build_croc_android.sh (CI runs this before release).
+**/jniLibs/**/libcroc.so

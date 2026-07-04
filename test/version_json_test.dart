@@ -19,7 +19,6 @@ void main() {
         '5',
         site,
       ],
-      workingDirectory: '/home/kb/repos/grok_build/Gator-flutter',
     );
     expect(result.exitCode, 0, reason: result.stderr.toString());
 

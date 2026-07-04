@@ -16,9 +16,11 @@ import java.io.FileOutputStream
 class MainActivity : FlutterActivity() {
     private var shareSink: EventChannel.EventSink? = null
     private var pendingShare: Map<String, Any?>? = null
+    private lateinit var crocRunner: CrocRunner
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        crocRunner = CrocRunner(applicationContext)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ABI_CHANNEL)
             .setMethodCallHandler { call, result ->
@@ -33,7 +35,16 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "getCrocPath" -> {
-                        result.success(packagedCrocPath())
+                        result.success(crocRunner.packagedCrocPath())
+                    }
+                    "verifyCroc" -> {
+                        result.success(crocRunner.verifyCroc())
+                    }
+                    "getCrocEnv" -> {
+                        result.success(crocRunner.crocEnvironment())
+                    }
+                    "getCrocDiagnostics" -> {
+                        result.success(crocRunner.diagnostics())
                     }
                     "getExecutableDir" -> {
                         val binDir = File(codeCacheDir, "bin")
@@ -98,12 +109,6 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleShareIntent(intent)
-    }
-
-    /** Packaged arm64 croc in jniLibs — executable from nativeLibraryDir. */
-    private fun packagedCrocPath(): String? {
-        val file = File(applicationInfo.nativeLibraryDir, "libcroc.so")
-        return if (file.exists() && file.length() > 0L) file.absolutePath else null
     }
 
     private fun handleShareIntent(intent: Intent?) {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:gator/core/constants.dart';
 import 'package:gator/models/transfer_state.dart';
 import 'package:gator/services/croc_parser.dart';
@@ -208,6 +209,16 @@ class CrocTransferService {
         runInShell: false,
       );
     }
+    if (Platform.isAndroid) {
+      final crocEnv = await _androidCrocEnvironment(env);
+      return Process.start(
+        args.first,
+        args.sublist(1),
+        environment: crocEnv,
+        workingDirectory: cwd,
+        runInShell: false,
+      );
+    }
     return Process.start(
       args.first,
       args.sublist(1),
@@ -215,6 +226,27 @@ class CrocTransferService {
       workingDirectory: cwd,
       runInShell: false,
     );
+  }
+
+  static Future<Map<String, String>> _androidCrocEnvironment(
+    Map<String, String>? extra,
+  ) async {
+    const channel = MethodChannel('org.gator.gator/croc');
+    try {
+      final base = await channel.invokeMethod<Map<Object?, Object?>>('getCrocEnv');
+      final merged = <String, String>{};
+      if (base != null) {
+        for (final entry in base.entries) {
+          if (entry.key is String && entry.value is String) {
+            merged[entry.key as String] = entry.value as String;
+          }
+        }
+      }
+      if (extra != null) merged.addAll(extra);
+      return merged;
+    } catch (_) {
+      return extra ?? const {};
+    }
   }
 
   Future<void> _spawn(

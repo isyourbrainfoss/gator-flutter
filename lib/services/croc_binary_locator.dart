@@ -9,6 +9,8 @@ class CrocBinaryLocator {
 
   String? _cachedPath;
 
+  static const _crocChannel = MethodChannel('org.gator.gator/croc');
+
   /// Returns the path to an executable croc binary, or null if unavailable.
   Future<String?> locate() async {
     if (_cachedPath != null) return _cachedPath;
@@ -20,12 +22,9 @@ class CrocBinaryLocator {
       return _cachedPath = resolved;
     }
 
-    // jniLibs/libcroc.so — Android allows executing native libs from
-    // nativeLibraryDir; extracted Flutter assets are blocked on many phones.
-    const channel = MethodChannel('org.gator.gator/croc');
     try {
-      final path = await channel.invokeMethod<String>('getCrocPath');
-      if (path != null && path.isNotEmpty && await File(path).exists()) {
+      final path = await _crocChannel.invokeMethod<String>('getCrocPath');
+      if (path != null && path.isNotEmpty) {
         return _cachedPath = path;
       }
     } catch (_) {
@@ -36,6 +35,14 @@ class CrocBinaryLocator {
 
   /// Verify croc runs and return version string, or null on failure.
   Future<String?> verify() async {
+    if (Platform.isAndroid) {
+      try {
+        return await _crocChannel.invokeMethod<String>('verifyCroc');
+      } catch (_) {
+        return null;
+      }
+    }
+
     final path = await locate();
     if (path == null) return null;
     try {

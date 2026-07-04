@@ -56,6 +56,13 @@ android {
             }
         }
     }
+
+    packaging {
+        jniLibs {
+            // Required so libcroc.so is extracted and can be exec'd as a subprocess.
+            useLegacyPackaging = true
+        }
+    }
 }
 
 kotlin {

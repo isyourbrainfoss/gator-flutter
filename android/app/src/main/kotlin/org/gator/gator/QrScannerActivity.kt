@@ -6,8 +6,8 @@ import android.os.Bundle
 import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
-import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
@@ -22,17 +22,13 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 
-class QrScannerActivity : AppCompatActivity() {
+class QrScannerActivity : ComponentActivity() {
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private var finished = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        supportActionBar?.apply {
-            title = "Scan QR Code"
-            setDisplayHomeAsUpEnabled(true)
-        }
 
         if (!hasCameraPermission()) {
             ActivityCompat.requestPermissions(
@@ -63,10 +59,10 @@ class QrScannerActivity : AppCompatActivity() {
         }
     }
 
-    override fun onSupportNavigateUp(): Boolean {
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
         setResult(RESULT_CANCELED)
         finish()
-        return true
     }
 
     override fun onDestroy() {

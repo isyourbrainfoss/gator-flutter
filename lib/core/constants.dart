@@ -3,7 +3,7 @@ library;
 
 const String appId = 'org.gator.Gator';
 const String appName = 'Gator';
-const String appVersion = '1.5';
+// appVersion removed: prefer runtime value from appVersionProvider (package_info_plus).
 const String crocVersion = '10.4.4';
 const String crocBinary = 'croc';
 const String codeIsPrefix = 'Code is: ';
@@ -26,3 +26,7 @@ const String legacyRelay = '37.27.244.215:9009';
 const String legacyRelay6 = '[2a01:4f9:c013:7b04::1]:9009';
 
 const String settingsStorageKey = 'gator_settings';
+
+/// Maximum number of shell log lines to retain in send/receive states.
+/// Prevents unbounded memory growth for long-running or verbose transfers.
+const int kMaxLogLines = 300;

@@ -1,11 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gator/models/gator_settings.dart';
 import 'package:gator/services/croc_transfer_service.dart';
 
 void main() {
   group('buildSendArgs', () {
     test('omits croc defaults when unset', () {
       final args = buildSendArgs(
-        settings: {},
+        settings: GatorSettings.defaults(),
         files: ['/tmp/a.txt'],
         excluded: [],
         text: '',
@@ -17,7 +18,7 @@ void main() {
 
     test('includes files and code', () {
       final args = buildSendArgs(
-        settings: {'default_code': 'mycode', 'git': true},
+        settings: GatorSettings.fromMap({'default_code': 'mycode', 'git': true}),
         files: ['/tmp/a.txt', '/tmp/b'],
         excluded: ['/tmp/ignore'],
         text: '',
@@ -33,7 +34,7 @@ void main() {
 
     test('text mode flag', () {
       final args = buildSendArgs(
-        settings: {},
+        settings: GatorSettings.defaults(),
         files: [],
         excluded: [],
         text: 'hello world',

@@ -45,10 +45,10 @@ void main() {
     test('load save roundtrip', () async {
       SharedPreferences.setMockInitialValues({});
       final repo = await SettingsRepository.create();
-      await repo.save({'port': 4321, 'debug': true});
+      await repo.save(GatorSettings.fromMap({'port': 4321, 'debug': true}));
       final loaded = repo.load();
-      expect(loaded['port'], 4321);
-      expect(loaded['debug'], isTrue);
+      expect(loaded.port, 4321);
+      expect(loaded.debug, isTrue);
     });
   });
 

@@ -17,7 +17,7 @@ class GatorApp extends ConsumerWidget {
     final crocStatus = ref.watch(crocAvailableProvider);
 
     final themeMode = settings.when(
-      data: (s) => switch (s['color_scheme'] as String? ?? 'default') {
+      data: (s) => switch (s.colorScheme) {
         'light' => ThemeMode.light,
         'dark' => ThemeMode.dark,
         _ => ThemeMode.system,

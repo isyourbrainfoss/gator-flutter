@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:gator/core/constants.dart';
+import 'package:gator/models/gator_settings.dart';
 
 final _progressRe = RegExp(r'(\d{1,3})%');
 final _codeIsRe = RegExp(r'^code is:\s*', caseSensitive: false);
@@ -130,52 +131,52 @@ String? detectTransferPhase(String line) {
   return (buf, segments);
 }
 
-/// Build croc global flags from a settings map.
-List<String> buildGlobalArgs(Map<String, dynamic> settings) {
+/// Build croc global flags from typed settings.
+List<String> buildGlobalArgs(GatorSettings settings) {
   final args = <String>[];
-  final curve = (settings['curve'] as String? ?? '').trim();
+  final curve = settings.curve.trim();
   if (curve.isNotEmpty) args.addAll(['--curve', curve]);
 
-  final relay = (settings['relay'] as String? ?? '').trim();
+  final relay = settings.relay.trim();
   if (relay.isNotEmpty) args.addAll(['--relay', relay]);
 
-  final relay6 = (settings['relay6'] as String? ?? '').trim();
+  final relay6 = settings.relay6.trim();
   if (relay6.isNotEmpty) args.addAll(['--relay6', relay6]);
 
-  final relayPass = (settings['pass'] as String? ?? '').trim();
+  final relayPass = settings.pass.trim();
   if (relayPass.isNotEmpty) args.addAll(['--pass', relayPass]);
 
-  if (settings['internal_dns'] == true) args.add('--internal-dns');
-  if (settings['debug'] == true) args.add('--debug');
-  if (settings['yes'] == true) args.add('--yes');
-  if (settings['no_compress'] == true) args.add('--no-compress');
-  if (settings['ask'] == true) args.add('--ask');
-  if (settings['local'] == true) args.add('--local');
-  if (settings['overwrite'] == true) args.add('--overwrite');
-  if (settings['testing'] == true) args.add('--testing');
-  if (settings['quiet'] == true) args.add('--quiet');
-  if (settings['disable_clipboard'] == true) args.add('--disable-clipboard');
-  if (settings['extended_clipboard'] == true) args.add('--extended-clipboard');
+  if (settings.internalDns) args.add('--internal-dns');
+  if (settings.debug) args.add('--debug');
+  if (settings.yes) args.add('--yes');
+  if (settings.noCompress) args.add('--no-compress');
+  if (settings.ask) args.add('--ask');
+  if (settings.local) args.add('--local');
+  if (settings.overwrite) args.add('--overwrite');
+  if (settings.testing) args.add('--testing');
+  if (settings.quiet) args.add('--quiet');
+  if (settings.disableClipboard) args.add('--disable-clipboard');
+  if (settings.extendedClipboard) args.add('--extended-clipboard');
 
-  final multicast = (settings['multicast'] as String? ?? '').trim();
+  final multicast = settings.multicast.trim();
   if (multicast.isNotEmpty) args.addAll(['--multicast', multicast]);
 
-  final ip = (settings['ip'] as String? ?? '').trim();
+  final ip = settings.ip.trim();
   if (ip.isNotEmpty) args.addAll(['--ip', ip]);
 
-  final socks5 = (settings['socks5'] as String? ?? '').trim();
+  final socks5 = settings.socks5.trim();
   if (socks5.isNotEmpty) args.addAll(['--socks5', socks5]);
 
-  final connect = (settings['connect'] as String? ?? '').trim();
+  final connect = settings.connect.trim();
   if (connect.isNotEmpty) args.addAll(['--connect', connect]);
 
-  final throttleUpload = (settings['throttle_upload'] as String? ?? '').trim();
+  final throttleUpload = settings.throttleUpload.trim();
   if (throttleUpload.isNotEmpty) args.addAll(['--throttleUpload', throttleUpload]);
 
   if (Platform.isAndroid) {
     args.add('--ignore-stdin');
     // Android system DNS often fails croc relay lookups; bundled resolver fixes it.
-    if (settings['internal_dns'] != false) {
+    if (settings.internalDns != false) {
       args.add('--internal-dns');
     }
   }
@@ -184,7 +185,7 @@ List<String> buildGlobalArgs(Map<String, dynamic> settings) {
 }
 
 /// Build argv for a croc receive invocation (code goes in CROC_SECRET).
-List<String> buildReceiveArgs(Map<String, dynamic> settings) {
+List<String> buildReceiveArgs(GatorSettings settings) {
   return [crocBinary, ...buildGlobalArgs(settings)];
 }
 

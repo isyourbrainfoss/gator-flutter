@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:gator/core/constants.dart';
 import 'package:gator/features/preferences/preferences_page.dart';
+import 'package:gator/models/gator_settings.dart';
+import 'package:gator/providers/app_version_provider.dart';
 import 'package:gator/features/receive/receive_notifier.dart';
 import 'package:gator/features/receive/receive_page.dart';
 import 'package:gator/features/send/send_notifier.dart';
@@ -63,19 +65,23 @@ class _GatorShellState extends ConsumerState<GatorShell> {
     showGatorSnackBar(context, 'Added shared content to Send queue');
   }
 
-  void _applySettingsToPages(Map<String, dynamic> settings) {
+  void _applySettingsToPages(GatorSettings settings) {
     ref.read(sendProvider.notifier).configure(
-          showShellOutput: settings['show_shell_output'] as bool? ?? false,
-          showQrImage: settings['show_qr_image'] as bool? ?? true,
+          showShellOutput: settings.showShellOutput,
+          showQrImage: settings.showQrImage,
         );
     ref.read(receiveProvider.notifier).configure(
-          showShellOutput: settings['show_shell_output'] as bool? ?? false,
+          showShellOutput: settings.showShellOutput,
         );
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(settingsProvider).whenData(_applySettingsToPages);
+    // Use listen (not watch) for side-effect only: configure child notifiers
+    // from settings without causing unnecessary rebuilds or anti-pattern.
+    ref.listen(settingsProvider, (previous, next) {
+      next.whenData(_applySettingsToPages);
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -132,10 +138,14 @@ class _GatorShellState extends ConsumerState<GatorShell> {
   }
 
   void _showAbout(BuildContext context) {
+    // Use runtime version from PackageInfo; gracefully fallback while loading.
+    final versionAsync = ref.read(appVersionProvider);
+    final version = versionAsync.value ?? '1.5.11';
+
     showAboutDialog(
       context: context,
       applicationName: appName,
-      applicationVersion: appVersion,
+      applicationVersion: version,
       applicationLegalese: 'GPL-3.0-or-later',
       children: [
         const Text(

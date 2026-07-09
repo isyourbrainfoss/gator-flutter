@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gator/core/constants.dart';
+import 'package:gator/models/gator_settings.dart';
 import 'package:gator/services/croc_parser.dart';
 
 void main() {
@@ -50,28 +51,32 @@ void main() {
 
   group('buildGlobalArgs', () {
     test('basic defaults omit flags', () {
-      final args = buildGlobalArgs({});
-      expect(args, isNot(contains('--yes')));
+      // defaults() has yes=true (so includes --yes), but omits empty/zero/falsy optionals
+      final args = buildGlobalArgs(GatorSettings.defaults());
+      expect(args, contains('--yes'));
       expect(args, isNot(contains('--relay')));
       expect(args, isNot(contains('--multicast')));
       expect(args, isNot(contains('--curve')));
+      expect(args, isNot(contains('--debug')));
     });
 
     test('omits empty relay', () {
-      final args = buildGlobalArgs({});
+      final args = buildGlobalArgs(GatorSettings.defaults());
       expect(args, isNot(contains('--relay')));
       expect(args, isNot(contains('--relay6')));
     });
 
     test('includes overrides', () {
-      final args = buildGlobalArgs({
-        'yes': true,
-        'overwrite': true,
-        'debug': true,
-        'relay': '1.2.3.4:9009',
-        'pass': 's3cr3t',
-        'port': 9999,
-      });
+      final args = buildGlobalArgs(
+        GatorSettings.fromMap({
+          'yes': true,
+          'overwrite': true,
+          'debug': true,
+          'relay': '1.2.3.4:9009',
+          'pass': 's3cr3t',
+          'port': 9999,
+        }),
+      );
       expect(args, contains('--yes'));
       expect(args, contains('--overwrite'));
       expect(args, contains('--debug'));
@@ -118,7 +123,9 @@ void main() {
 
   group('buildReceiveArgs', () {
     test('respects yes pref false', () {
-      final args = buildReceiveArgs({'yes': false, 'relay': ''});
+      final args = buildReceiveArgs(
+        GatorSettings.fromMap({'yes': false, 'relay': ''}),
+      );
       expect(args.first, crocBinary);
       expect(args, isNot(contains('--relay')));
       expect(args, isNot(contains('--yes')));
@@ -126,7 +133,7 @@ void main() {
     });
 
     test('includes yes when enabled', () {
-      final args = buildReceiveArgs({'yes': true});
+      final args = buildReceiveArgs(GatorSettings.fromMap({'yes': true}));
       expect(args, contains('--yes'));
       expect(args, isNot(contains('abc-code')));
     });

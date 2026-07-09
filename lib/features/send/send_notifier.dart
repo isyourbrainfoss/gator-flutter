@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:gator/core/constants.dart';
 import 'package:gator/features/send/send_state.dart';
 import 'package:gator/models/transfer_state.dart';
 
@@ -63,8 +64,14 @@ class SendNotifier extends Notifier<SendState> {
   void setProgress(double p, TransferPhase phase) =>
       state = state.copyWith(progress: p, phase: phase);
 
-  void appendLog(String line) =>
-      state = state.copyWith(log: [...state.log, line]);
+  void appendLog(String line) {
+    final next = [...state.log, line];
+    state = state.copyWith(
+      log: next.length > kMaxLogLines
+          ? next.sublist(next.length - kMaxLogLines)
+          : next,
+    );
+  }
 
   void finishTransfer({required bool canceled}) {
     state = state.copyWith(

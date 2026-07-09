@@ -3,12 +3,15 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:gator/features/send/send_notifier.dart';
+import 'package:gator/models/gator_settings.dart';
 import 'package:gator/models/transfer_state.dart';
 import 'package:gator/providers/settings_provider.dart';
 import 'package:gator/providers/transfer_providers.dart';
 import 'package:gator/services/croc_transfer_service.dart';
 
 /// Wires [SendNotifier] to [CrocTransferService].
+/// Controllers own the service + subscription but are UI-agnostic.
+/// Side effects (snacks, etc.) are driven from pages via ref.listen.
 class SendController {
   SendController(this.ref);
 
@@ -29,7 +32,7 @@ class SendController {
       return;
     }
 
-    final settings = ref.read(settingsProvider).value ?? {};
+    final settings = ref.read(settingsProvider).value ?? GatorSettings.defaults();
     notifier.startTransfer();
 
     _sub = _service!.events.listen((event) {
@@ -88,8 +91,17 @@ class SendController {
     _service?.dispose();
     _service = null;
   }
+
+  /// Called via Riverpod ref.onDispose for proper lifecycle.
+  void dispose() {
+    _cleanup();
+  }
 }
 
-final sendControllerProvider = Provider<SendController>(
-  (ref) => SendController(ref),
+final sendControllerProvider = Provider.autoDispose<SendController>(
+  (ref) {
+    final controller = SendController(ref);
+    ref.onDispose(controller.dispose);
+    return controller;
+  },
 );

@@ -31,15 +31,26 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // Basic sections and settings always visible
       expect(find.text('General Options'), findsOneWidget);
-      expect(find.text('Relay and Proxy'), findsOneWidget);
       expect(find.text('Sending Options'), findsOneWidget);
       expect(find.text('Debug mode'), findsOneWidget);
-      expect(find.text('SOCKS5 proxy'), findsOneWidget);
-      expect(find.text('HTTP proxy'), findsOneWidget);
       expect(find.text('Zip folder before sending'), findsOneWidget);
       expect(find.text('Automatically accept incoming transfers'),
           findsOneWidget);
+
+      // Advanced toggle present (off by default, hides complexity)
+      expect(find.text('Show advanced options'), findsOneWidget);
+      expect(find.text('Relay and Proxy'), findsNothing);
+      expect(find.text('SOCKS5 proxy'), findsNothing);
+
+      // Toggle on to reveal advanced sections/options
+      await tester.tap(find.text('Show advanced options'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Relay and Proxy'), findsOneWidget);
+      expect(find.text('SOCKS5 proxy'), findsOneWidget);
+      expect(find.text('HTTP proxy'), findsOneWidget);
     });
   });
 }

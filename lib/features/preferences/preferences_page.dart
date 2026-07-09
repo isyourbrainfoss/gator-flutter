@@ -29,7 +29,7 @@ class PreferencesPage extends ConsumerWidget {
             ListTile(
               title: const Text('Color scheme'),
               trailing: DropdownButton<String>(
-                value: settings['color_scheme'] as String? ?? 'default',
+                value: settings.colorScheme,
                 items: const [
                   DropdownMenuItem(
                     value: 'default',
@@ -51,7 +51,7 @@ class PreferencesPage extends ConsumerWidget {
             PreferenceSwitch(
               title: 'Show QR image',
               subtitle: 'Display the QR code for the generated transfer code',
-              value: settings['show_qr_image'] as bool? ?? true,
+              value: settings.showQrImage,
               onChanged: (v) => ref
                   .read(settingsProvider.notifier)
                   .updateSetting('show_qr_image', v),
@@ -59,16 +59,24 @@ class PreferencesPage extends ConsumerWidget {
             PreferenceSwitch(
               title: 'Show shell output',
               subtitle: 'Show detailed output from the croc command',
-              value: settings['show_shell_output'] as bool? ?? false,
+              value: settings.showShellOutput,
               onChanged: (v) => ref
                   .read(settingsProvider.notifier)
                   .updateSetting('show_shell_output', v),
+            ),
+            PreferenceSwitch(
+              title: 'Show advanced options',
+              subtitle: 'Reveal relay/proxy and power-user settings (e.g. throttle, no-multi, git)',
+              value: settings.showAdvancedSettings,
+              onChanged: (v) => ref
+                  .read(settingsProvider.notifier)
+                  .updateSetting('show_advanced_settings', v),
             ),
             const PreferenceSectionHeader('Receiving'),
             ListTile(
               title: const Text('Default save folder'),
               subtitle: Text(
-                settings['save_dir'] as String? ?? getDefaultSaveDirLabel(),
+                settings.saveDir ?? getDefaultSaveDirLabel(),
               ),
               trailing: IconButton(
                 icon: const Icon(Icons.folder_open),
@@ -86,20 +94,21 @@ class PreferencesPage extends ConsumerWidget {
             PreferenceSwitch(
               title: 'Automatically accept incoming transfers',
               subtitle: 'Passes --yes to croc; skips all confirmation prompts',
-              value: settings['yes'] as bool? ?? true,
+              value: settings.yes,
               onChanged: (v) =>
                   ref.read(settingsProvider.notifier).updateSetting('yes', v),
             ),
             PreferenceSwitch(
               title: 'Overwrite existing files without prompt',
               subtitle: 'Passes --overwrite to croc',
-              value: settings['overwrite'] as bool? ?? false,
+              value: settings.overwrite,
               onChanged: (v) => ref
                   .read(settingsProvider.notifier)
                   .updateSetting('overwrite', v),
             ),
             GeneralOptionsSection(settings: settings),
-            RelayProxySection(settings: settings),
+            if (settings.showAdvancedSettings)
+              RelayProxySection(settings: settings),
             SendingOptionsSection(settings: settings),
             const PreferenceSectionHeader('Reset'),
             Padding(

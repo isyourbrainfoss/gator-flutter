@@ -1,17 +1,16 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gator/features/dialogs/received_text_dialog.dart';
-import 'package:gator/features/dialogs/transfer_complete_dialog.dart';
 import 'package:gator/features/receive/receive_notifier.dart';
+import 'package:gator/models/gator_settings.dart';
 import 'package:gator/models/transfer_state.dart';
 import 'package:gator/providers/settings_provider.dart';
 import 'package:gator/providers/transfer_providers.dart';
 import 'package:gator/services/croc_transfer_service.dart';
-import 'package:gator/services/folder_opener.dart';
 
 /// Wires [ReceiveNotifier] to [CrocTransferService].
+/// Controllers own the service + subscription but are UI-agnostic (no BuildContext).
+/// Side effects like dialogs are driven from pages via ref.listen on notifier state.
 class ReceiveController {
   ReceiveController(this.ref);
 
@@ -19,7 +18,7 @@ class ReceiveController {
   CrocTransferService? _service;
   StreamSubscription<CrocEvent>? _sub;
 
-  Future<void> startTransfer(BuildContext context) async {
+  Future<void> startTransfer() async {
     final notifier = ref.read(receiveProvider.notifier);
     final state = ref.read(receiveProvider);
     if (!state.canStart) return;
@@ -27,11 +26,11 @@ class ReceiveController {
     _service = await createTransferService(ref);
     if (_service == null) return;
 
-    final settings = ref.read(settingsProvider).value ?? {};
+    final settings = ref.read(settingsProvider).value ?? GatorSettings.defaults();
     final filesBefore = await snapshotDir(state.saveDir);
     notifier.startTransfer();
 
-    _sub = _service!.events.listen((event) async {
+    _sub = _service!.events.listen((event) {
       switch (event) {
         case CrocLogEvent(:final message):
           notifier.appendLog(message);
@@ -43,16 +42,9 @@ class ReceiveController {
             phaseFromString(phase),
           );
         case CrocTextReceivedEvent(:final text):
-          if (context.mounted) {
-            await showReceivedTextDialog(context, text);
-          }
+          notifier.onTextReceived(text);
         case CrocTransferCompleteEvent():
-          if (context.mounted) {
-            final open = await showTransferCompleteDialog(context);
-            if (open && context.mounted) {
-              await FolderOpener.open(state.saveDir);
-            }
-          }
+          notifier.onTransferComplete();
         case CrocFinishedEvent(:final exitCode):
           notifier.finishTransfer(
             canceled: _service!.canceled,
@@ -84,8 +76,17 @@ class ReceiveController {
     _service?.dispose();
     _service = null;
   }
+
+  /// Called via Riverpod ref.onDispose for proper lifecycle.
+  void dispose() {
+    _cleanup();
+  }
 }
 
-final receiveControllerProvider = Provider<ReceiveController>(
-  (ref) => ReceiveController(ref),
+final receiveControllerProvider = Provider.autoDispose<ReceiveController>(
+  (ref) {
+    final controller = ReceiveController(ref);
+    ref.onDispose(controller.dispose);
+    return controller;
+  },
 );

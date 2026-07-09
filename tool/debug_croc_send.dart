@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:gator/models/gator_settings.dart';
 import 'package:gator/models/transfer_state.dart';
 import 'package:gator/services/croc_transfer_service.dart';
 
@@ -22,7 +23,7 @@ Future<void> main() async {
 
   unawaited(
     service.startSend(
-      settings: {'yes': true},
+      settings: GatorSettings.fromMap({'yes': true}),
       files: [f.path],
       excluded: [],
       text: '',

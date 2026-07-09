@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gator/models/gator_settings.dart';
 import 'package:gator/models/transfer_state.dart';
 import 'package:gator/services/croc_transfer_service.dart';
 
@@ -26,7 +27,7 @@ void main() {
 
     unawaited(
       service.startSend(
-        settings: const {},
+        settings: GatorSettings.defaults(),
         files: [testFile.path],
         excluded: const [],
         text: '',

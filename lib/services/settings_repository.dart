@@ -17,30 +17,24 @@ class SettingsRepository {
     return SettingsRepository(prefs);
   }
 
-  Map<String, dynamic> load() {
+  GatorSettings load() {
     final json = _prefs.getString(settingsStorageKey);
     if (json == null || json.isEmpty) {
-      return processSettings({});
+      return GatorSettings.fromMap({});
     }
     try {
       final decoded = jsonDecode(json);
       if (decoded is Map<String, dynamic>) {
-        return processSettings(decoded);
+        return GatorSettings.fromMap(decoded);
       }
     } catch (_) {
       // Fall through to defaults.
     }
-    return processSettings({});
+    return GatorSettings.fromMap({});
   }
 
-  Future<void> save(Map<String, dynamic> settings) async {
-    final validated = validateSettings(settings);
-    final toSave = <String, dynamic>{};
-    for (final entry in validated.entries) {
-      if (entry.value != gatorDefaults[entry.key]) {
-        toSave[entry.key] = entry.value;
-      }
-    }
+  Future<void> save(GatorSettings settings) async {
+    final toSave = settings.toDiffMap();
     await _prefs.setString(settingsStorageKey, jsonEncode(toSave));
   }
 
@@ -49,8 +43,8 @@ class SettingsRepository {
   }
 
   /// Resolve save directory path, using persisted value or platform default.
-  Future<String> resolveSaveDir(Map<String, dynamic> settings) async {
-    final saved = settings['save_dir'] as String?;
+  Future<String> resolveSaveDir(GatorSettings settings) async {
+    final saved = settings.saveDir;
     if (saved != null && saved.isNotEmpty) {
       return saved;
     }

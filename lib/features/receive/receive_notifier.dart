@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:gator/core/constants.dart';
 import 'package:gator/features/receive/receive_state.dart';
 import 'package:gator/models/transfer_state.dart';
 import 'package:gator/providers/settings_provider.dart';
@@ -39,14 +40,22 @@ class ReceiveNotifier extends Notifier<ReceiveState> {
       progress: 0,
       phase: TransferPhase.receiving,
       log: [],
+      receivedText: null,
+      pendingCompleteDialog: false,
     );
   }
 
   void setProgress(double p, TransferPhase phase) =>
       state = state.copyWith(progress: p, phase: phase);
 
-  void appendLog(String line) =>
-      state = state.copyWith(log: [...state.log, line]);
+  void appendLog(String line) {
+    final next = [...state.log, line];
+    state = state.copyWith(
+      log: next.length > kMaxLogLines
+          ? next.sublist(next.length - kMaxLogLines)
+          : next,
+    );
+  }
 
   void finishTransfer({required bool canceled, int exitCode = 0}) {
     final success = !canceled && exitCode == 0;
@@ -59,7 +68,32 @@ class ReceiveNotifier extends Notifier<ReceiveState> {
           : success
               ? TransferPhase.complete
               : TransferPhase.error,
+      // Clear transients on finish too (defensive)
+      receivedText: null,
+      pendingCompleteDialog: false,
     );
+  }
+
+  /// Called by controller on CrocTextReceivedEvent. UI layer listens and shows dialog.
+  void onTextReceived(String text) {
+    state = state.copyWith(receivedText: text);
+  }
+
+  /// Called by controller on CrocTransferCompleteEvent. UI layer listens and shows dialog + optional open.
+  void onTransferComplete() {
+    state = state.copyWith(pendingCompleteDialog: true);
+  }
+
+  void clearReceivedText() {
+    if (state.receivedText != null) {
+      state = state.copyWith(receivedText: null);
+    }
+  }
+
+  void clearPendingCompleteDialog() {
+    if (state.pendingCompleteDialog) {
+      state = state.copyWith(pendingCompleteDialog: false);
+    }
   }
 }
 

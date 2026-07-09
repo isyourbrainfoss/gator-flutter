@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:gator/core/constants.dart';
 import 'package:gator/features/dialogs/add_text_dialog.dart';
 import 'package:gator/features/send/send_controller.dart';
 import 'package:gator/features/send/send_notifier.dart';
@@ -113,7 +114,9 @@ class SendPage extends ConsumerWidget {
         ],
         if ((state.showShellOutput || state.transferring) && state.log.isNotEmpty)
           ExpansionTile(
-            title: const Text('Shell output'),
+            title: Text(
+              'Shell output${state.log.length >= kMaxLogLines ? " (trimmed)" : ""}',
+            ),
             initiallyExpanded: true,
             children: [
               Container(

@@ -4,36 +4,35 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:gator/core/constants.dart';
+import 'package:gator/models/gator_settings.dart';
 import 'package:gator/models/transfer_state.dart';
 import 'package:gator/services/croc_parser.dart';
 
 /// Builds send argv (ported from CrocSendTransfer._build_args).
 List<String> buildSendArgs({
-  required Map<String, dynamic> settings,
+  required GatorSettings settings,
   required List<String> files,
   required List<String> excluded,
   required String text,
 }) {
   final args = [crocBinary, ...buildGlobalArgs(settings), 'send'];
-  final custom = (settings['default_code'] as String? ?? '').trim();
+  final custom = settings.defaultCode.trim();
   if (custom.isNotEmpty) args.addAll(['--code', custom]);
 
-  final hashAlg = (settings['hash'] as String? ?? '').trim();
+  final hashAlg = settings.hash.trim();
   if (hashAlg.isNotEmpty) args.addAll(['--hash', hashAlg]);
 
-  if (settings['zip_folder'] == true) args.add('--zip');
+  if (settings.zipFolder) args.add('--zip');
   if (text.isNotEmpty) args.addAll(['--text', text]);
-  if (settings['no_local'] == true) args.add('--no-local');
-  if (settings['no_multi'] == true) args.add('--no-multi');
-  if (settings['git'] == true) args.add('--git');
+  if (settings.noLocal) args.add('--no-local');
+  if (settings.noMulti) args.add('--no-multi');
+  if (settings.git) args.add('--git');
 
-  final port = int.tryParse(settings['port']?.toString() ?? '') ?? 0;
-  if (port > 0) args.addAll(['--port', '$port']);
+  if (settings.port > 0) args.addAll(['--port', '${settings.port}']);
 
-  final transfers = int.tryParse(settings['transfers']?.toString() ?? '') ?? 0;
-  if (transfers > 0) args.addAll(['--transfers', '$transfers']);
+  if (settings.transfers > 0) args.addAll(['--transfers', '${settings.transfers}']);
 
-  if (settings['qr'] == true) args.add('--qr');
+  if (settings.qr) args.add('--qr');
 
   if (excluded.isNotEmpty) {
     final names = excluded.map((p) => p.split(Platform.pathSeparator).last);
@@ -64,7 +63,7 @@ class CrocTransferService {
   bool get canceled => _canceled;
 
   Future<void> startSend({
-    required Map<String, dynamic> settings,
+    required GatorSettings settings,
     required List<String> files,
     required List<String> excluded,
     required String text,
@@ -79,7 +78,7 @@ class CrocTransferService {
   }
 
   Future<void> startReceive({
-    required Map<String, dynamic> settings,
+    required GatorSettings settings,
     required String code,
     required String saveDir,
     required Set<String> filesBefore,

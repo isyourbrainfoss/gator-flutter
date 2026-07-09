@@ -7,6 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import 'package:gator/core/constants.dart';
+import 'package:gator/features/dialogs/received_text_dialog.dart';
+import 'package:gator/features/dialogs/transfer_complete_dialog.dart';
 import 'package:gator/features/receive/receive_controller.dart';
 import 'package:gator/features/receive/receive_notifier.dart';
 import 'package:gator/services/folder_opener.dart';
@@ -39,6 +42,32 @@ class _ReceivePageState extends ConsumerState<ReceivePage> {
       }
     });
 
+    // Listen for side-effect events from controller-orchestrated transfers.
+    // Dialogs (and any snack) live in the Page; controllers remain context-free.
+    ref.listen(receiveProvider.select((s) => s.receivedText), (prev, next) {
+      if (next != null && next.isNotEmpty && next != prev) {
+        showReceivedTextDialog(context, next).then((_) {
+          if (mounted) {
+            ref.read(receiveProvider.notifier).clearReceivedText();
+          }
+        });
+      }
+    });
+
+    ref.listen(receiveProvider.select((s) => s.pendingCompleteDialog), (prev, next) {
+      if (next == true && prev != true) {
+        showTransferCompleteDialog(context).then((open) async {
+          if (open && mounted) {
+            final dir = ref.read(receiveProvider).saveDir;
+            await FolderOpener.open(dir);
+          }
+          if (mounted) {
+            ref.read(receiveProvider.notifier).clearPendingCompleteDialog();
+          }
+        });
+      }
+    });
+
     final state = ref.watch(receiveProvider);
     final notifier = ref.read(receiveProvider.notifier);
     final controller = ref.read(receiveControllerProvider);
@@ -57,14 +86,14 @@ class _ReceivePageState extends ConsumerState<ReceivePage> {
                   ? null
                   : () {
                       notifier.setCode(_codeController.text);
-                      controller.startTransfer(context);
+                      controller.startTransfer();
                     },
             ),
           ),
           enabled: !state.transferring,
           onSubmitted: state.transferring
               ? null
-              : (_) => controller.startTransfer(context),
+              : (_) => controller.startTransfer(),
           onChanged: notifier.setCode,
         ),
         const SizedBox(height: 12),
@@ -152,7 +181,7 @@ class _ReceivePageState extends ConsumerState<ReceivePage> {
                 width: double.infinity,
                 child: AdaptiveFilledButton(
                   onPressed: state.canStart
-                      ? () => controller.startTransfer(context)
+                      ? () => controller.startTransfer()
                       : null,
                   icon: const Icon(Icons.download),
                   label: const Text('Start Receiving'),
@@ -177,7 +206,9 @@ class _ReceivePageState extends ConsumerState<ReceivePage> {
           ),
         if (state.showShellOutput && state.log.isNotEmpty)
           ExpansionTile(
-            title: const Text('Shell output'),
+            title: Text(
+              'Shell output${state.log.length >= kMaxLogLines ? " (trimmed)" : ""}',
+            ),
             initiallyExpanded: true,
             children: [
               Container(

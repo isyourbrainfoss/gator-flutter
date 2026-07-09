@@ -40,6 +40,7 @@ class ReceiveNotifier extends Notifier<ReceiveState> {
       progress: 0,
       phase: TransferPhase.receiving,
       log: [],
+      currentFile: null,
       receivedText: null,
       pendingCompleteDialog: false,
     );
@@ -56,6 +57,8 @@ class ReceiveNotifier extends Notifier<ReceiveState> {
           : next,
     );
   }
+
+  void setCurrentFile(String? file) => state = state.copyWith(currentFile: file);
 
   void finishTransfer({required bool canceled, int exitCode = 0}) {
     final success = !canceled && exitCode == 0;

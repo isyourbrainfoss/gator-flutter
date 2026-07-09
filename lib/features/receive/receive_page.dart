@@ -172,6 +172,7 @@ class _ReceivePageState extends ConsumerState<ReceivePage> {
             phase: state.phase,
             showSpinner: state.transferring,
             complete: state.complete,
+            currentFile: state.currentFile,
           )
         else
           Center(

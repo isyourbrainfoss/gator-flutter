@@ -11,6 +11,7 @@ class ReceiveState {
     this.phase = TransferPhase.idle,
     this.log = const [],
     this.showShellOutput = false,
+    this.currentFile,
     this.receivedText,
     this.pendingCompleteDialog = false,
   });
@@ -24,6 +25,7 @@ class ReceiveState {
   final TransferPhase phase;
   final List<String> log;
   final bool showShellOutput;
+  final String? currentFile;
 
   /// Transient: set when CrocTextReceivedEvent arrives; cleared by UI after dialog.
   final String? receivedText;
@@ -43,6 +45,7 @@ class ReceiveState {
     TransferPhase? phase,
     List<String>? log,
     bool? showShellOutput,
+    String? currentFile,
     String? receivedText,
     bool? pendingCompleteDialog,
   }) =>
@@ -56,6 +59,7 @@ class ReceiveState {
         phase: phase ?? this.phase,
         log: log ?? this.log,
         showShellOutput: showShellOutput ?? this.showShellOutput,
+        currentFile: currentFile ?? this.currentFile,
         receivedText: receivedText ?? this.receivedText,
         pendingCompleteDialog: pendingCompleteDialog ?? this.pendingCompleteDialog,
       );

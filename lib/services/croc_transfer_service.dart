@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:gator/core/constants.dart';
+import 'package:gator/core/logger.dart';
 import 'package:gator/models/gator_settings.dart';
 import 'package:gator/models/transfer_state.dart';
 import 'package:gator/services/croc_parser.dart';
@@ -243,7 +244,8 @@ class CrocTransferService {
       }
       if (extra != null) merged.addAll(extra);
       return merged;
-    } catch (_) {
+    } catch (e) {
+      GatorLog.w('CrocTransferService', 'Failed to get Android croc env: $e');
       return extra ?? const {};
     }
   }
@@ -336,7 +338,8 @@ class CrocTransferService {
       final newItems = after.difference(ctx.filesBefore);
       final nonText = newItems.where((n) => !n.startsWith('croc-stdin-'));
       if (nonText.isNotEmpty) receivedFiles = true;
-    } catch (_) {
+    } catch (e) {
+      GatorLog.d('CrocTransferService', 'Post-process dir snapshot failed: $e');
       receivedFiles = _sawFileIndicator;
     }
 
@@ -377,7 +380,9 @@ class CrocTransferService {
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      GatorLog.d('CrocTransferService', 'Temp text file check failed: $e');
+    }
     return false;
   }
 
@@ -401,7 +406,9 @@ class CrocTransferService {
           await _resolveHostTool('pkill'),
           ['-KILL', '-P', '${proc.pid}'],
         );
-      } catch (_) {}
+      } catch (e) {
+        GatorLog.w('CrocTransferService', 'pkill failed during teardown: $e');
+      }
     }
     proc.kill(ProcessSignal.sigkill);
     await _stdoutSub?.cancel();

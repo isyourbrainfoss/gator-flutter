@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gator/core/constants.dart';
+import 'package:gator/core/logger.dart';
 import 'package:gator/models/gator_settings.dart';
 
 /// Persists Gator settings via shared_preferences JSON blob.
@@ -27,8 +28,8 @@ class SettingsRepository {
       if (decoded is Map<String, dynamic>) {
         return GatorSettings.fromMap(decoded);
       }
-    } catch (_) {
-      // Fall through to defaults.
+    } catch (e) {
+      GatorLog.w('SettingsRepository', 'Failed to decode settings JSON, falling back to defaults: $e');
     }
     return GatorSettings.fromMap({});
   }

@@ -97,6 +97,14 @@ String? detectTransferPhase(String line) {
   return null;
 }
 
+final _fileNameRe = RegExp(r'(?:Receiving|Sending) file \(([^)]+)\)');
+
+/// Try to extract the current filename from a croc status line.
+String? extractFileName(String line) {
+  final match = _fileNameRe.firstMatch(line);
+  return match?.group(1);
+}
+
 /// Split croc stdout on newlines and carriage returns.
 ///
 /// Returns (remainingBuffer, [(segment, fromNewline), ...]).

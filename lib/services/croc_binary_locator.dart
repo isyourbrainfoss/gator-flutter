@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'package:gator/core/logger.dart';
+
 /// Locates the bundled croc binary for the current platform.
 class CrocBinaryLocator {
   CrocBinaryLocator({this._cachedPath});
@@ -27,8 +29,8 @@ class CrocBinaryLocator {
       if (path != null && path.isNotEmpty) {
         return _cachedPath = path;
       }
-    } catch (_) {
-      // Fall through.
+    } catch (e) {
+      GatorLog.w('CrocBinaryLocator', 'Failed to get croc path via channel: $e');
     }
     return null;
   }
@@ -38,7 +40,8 @@ class CrocBinaryLocator {
     if (Platform.isAndroid) {
       try {
         return await _crocChannel.invokeMethod<String>('verifyCroc');
-      } catch (_) {
+      } catch (e) {
+        GatorLog.w('CrocBinaryLocator', 'Android verifyCroc failed: $e');
         return null;
       }
     }
@@ -53,7 +56,8 @@ class CrocBinaryLocator {
       }
       final err = (result.stderr as String).trim();
       if (err.isNotEmpty) return err;
-    } catch (_) {
+    } catch (e) {
+      GatorLog.w('CrocBinaryLocator', 'Process --version failed for $path: $e');
       return null;
     }
     return null;
@@ -74,7 +78,9 @@ class CrocBinaryLocator {
         final path = (which.stdout as String).trim();
         if (path.isNotEmpty) return path;
       }
-    } catch (_) {}
+    } catch (e) {
+      GatorLog.d('CrocBinaryLocator', 'which croc failed: $e');
+    }
     return 'croc';
   }
 }

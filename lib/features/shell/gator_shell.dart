@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gator/core/logger.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:gator/core/constants.dart';
@@ -25,13 +26,14 @@ class GatorShell extends ConsumerStatefulWidget {
   ConsumerState<GatorShell> createState() => _GatorShellState();
 }
 
-class _GatorShellState extends ConsumerState<GatorShell> {
+class _GatorShellState extends ConsumerState<GatorShell> with WidgetsBindingObserver {
   int _index = 0;
   StreamSubscription<SharePayload>? _shareSub;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initShareIntentHandling();
     });
@@ -39,8 +41,16 @@ class _GatorShellState extends ConsumerState<GatorShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _shareSub?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    GatorLog.d('GatorShell', 'App lifecycle: $state');
+    // Future: could pause active transfers or show warning here.
+    super.didChangeAppLifecycleState(state);
   }
 
   Future<void> _initShareIntentHandling() async {

@@ -10,12 +10,14 @@ class TransferProgressCard extends StatelessWidget {
     this.phase,
     this.showSpinner = false,
     this.complete = false,
+    this.currentFile,
   });
 
   final double progress;
   final TransferPhase? phase;
   final bool showSpinner;
   final bool complete;
+  final String? currentFile;
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +45,22 @@ class TransferProgressCard extends StatelessWidget {
                     child: Icon(Icons.check_circle, color: colorScheme.primary),
                   ),
                 Expanded(
-                  child: PhaseLabel(phase: phase),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      PhaseLabel(phase: phase),
+                      if (currentFile != null && currentFile!.isNotEmpty)
+                        Text(
+                          currentFile!,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
                 ),
                 Text('${(progress * 100).round()}%'),
               ],

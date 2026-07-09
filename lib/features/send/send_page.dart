@@ -53,6 +53,7 @@ class SendPage extends ConsumerWidget {
             phase: state.phase,
             showSpinner: state.transferring,
             complete: state.complete,
+            currentFile: state.currentFile,
           )
         else
           Center(

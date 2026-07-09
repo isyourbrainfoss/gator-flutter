@@ -7,6 +7,7 @@ import 'package:gator/models/gator_settings.dart';
 import 'package:gator/models/transfer_state.dart';
 import 'package:gator/providers/settings_provider.dart';
 import 'package:gator/providers/transfer_providers.dart';
+import 'package:gator/services/croc_parser.dart';
 import 'package:gator/services/croc_transfer_service.dart';
 
 /// Wires [SendNotifier] to [CrocTransferService].
@@ -39,6 +40,8 @@ class SendController {
       switch (event) {
         case CrocLogEvent(:final message):
           notifier.appendLog(message);
+          final file = extractFileName(message);
+          if (file != null) notifier.setCurrentFile(file);
         case CrocCodeEvent(:final code):
           notifier.setCode(code);
         case CrocProgressEvent(:final fraction):

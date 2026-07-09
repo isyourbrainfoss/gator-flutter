@@ -6,6 +6,7 @@ import 'package:gator/models/gator_settings.dart';
 import 'package:gator/models/transfer_state.dart';
 import 'package:gator/providers/settings_provider.dart';
 import 'package:gator/providers/transfer_providers.dart';
+import 'package:gator/services/croc_parser.dart';
 import 'package:gator/services/croc_transfer_service.dart';
 
 /// Wires [ReceiveNotifier] to [CrocTransferService].
@@ -34,6 +35,8 @@ class ReceiveController {
       switch (event) {
         case CrocLogEvent(:final message):
           notifier.appendLog(message);
+          final file = extractFileName(message);
+          if (file != null) notifier.setCurrentFile(file);
         case CrocProgressEvent(:final fraction):
           notifier.setProgress(fraction, ref.read(receiveProvider).phase);
         case CrocStatusEvent(:final phase):

@@ -27,6 +27,7 @@ class SendState {
     this.showShellOutput = false,
     this.showQrImage = true,
     this.errorMessage = '',
+    this.currentFile,
   });
 
   final List<SendItem> items;
@@ -41,6 +42,7 @@ class SendState {
   final bool showShellOutput;
   final bool showQrImage;
   final String errorMessage;
+  final String? currentFile;
 
   bool get canStart =>
       !transferring &&
@@ -66,6 +68,7 @@ class SendState {
     bool? showShellOutput,
     bool? showQrImage,
     String? errorMessage,
+    String? currentFile,
   }) =>
       SendState(
         items: items ?? this.items,
@@ -80,5 +83,6 @@ class SendState {
         showShellOutput: showShellOutput ?? this.showShellOutput,
         showQrImage: showQrImage ?? this.showQrImage,
         errorMessage: errorMessage ?? this.errorMessage,
+        currentFile: currentFile ?? this.currentFile,
       );
 }

@@ -53,6 +53,7 @@ class SendNotifier extends Notifier<SendState> {
       code: '',
       log: [],
       errorMessage: '',
+      currentFile: null,
     );
   }
 
@@ -60,6 +61,8 @@ class SendNotifier extends Notifier<SendState> {
       state = state.copyWith(errorMessage: message);
 
   void setCode(String code) => state = state.copyWith(code: code);
+
+  void setCurrentFile(String? file) => state = state.copyWith(currentFile: file);
 
   void setProgress(double p, TransferPhase phase) =>
       state = state.copyWith(progress: p, phase: phase);

@@ -167,4 +167,19 @@ void main() {
       expect(isCrocStatusLine('Line one of a note'), isFalse);
     });
   });
+
+  group('extractFileName', () {
+    test('extracts filename from croc lines', () {
+      expect(
+        extractFileName('Receiving file (document.pdf)  45%'),
+        'document.pdf',
+      );
+      expect(
+        extractFileName('Sending file (photo.jpg) ...'),
+        'photo.jpg',
+      );
+      expect(extractFileName('some other log line'), isNull);
+      expect(extractFileName('Receiving file (file-with-dashes.txt)'), 'file-with-dashes.txt');
+    });
+  });
 }

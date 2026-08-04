@@ -49,3 +49,11 @@ app.*.map.json
 
 # Local debug artifacts
 /tool/debug_croc_send.dart.bak
+
+.flatpak-builder/
+flatpak/repo/
+flatpak/build-*/
+flatpak/*.flatpak
+flatpak/croc
+flatpak/gator-linux-bundle.tar.gz
+flatpak/org.gator.gator.png

@@ -1,0 +1,45 @@
+# Flutter Linux bundle packaged as Flatpak (same pattern as Flowlog).
+# Built by flatpak/build-flatpak.sh — not meant for Flathub source builds.
+app-id: org.gator.gator
+runtime: org.gnome.Platform
+runtime-version: '48'
+sdk: org.gnome.Sdk
+command: gator
+separate-locales: false
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=xdg-download
+  - --filesystem=xdg-documents
+  - --filesystem=xdg-pictures
+  - --talk-name=org.freedesktop.Notifications
+modules:
+  - name: gator
+    buildsystem: simple
+    build-commands:
+      # Flutter resolves libapp.so and flutter_assets relative to the binary
+      # (see fl_dart_project.cc: $executable_dir/lib and $executable_dir/data).
+      - install -Dm755 bundle/gator /app/bin/gator
+      - cp -ra bundle/lib /app/bin/
+      - cp -ra bundle/data /app/bin/
+      # Bundled croc (same major as Android assets); on PATH as /app/bin/croc.
+      - install -Dm755 croc /app/bin/croc
+      - install -Dm644 org.gator.gator.png /app/share/icons/hicolor/128x128/apps/org.gator.gator.png
+      - install -Dm644 org.gator.gator.png /app/share/icons/hicolor/64x64/apps/org.gator.gator.png
+      - install -Dm644 org.gator.gator.desktop /app/share/applications/org.gator.gator.desktop
+      - install -Dm644 org.gator.gator.metainfo.xml /app/share/metainfo/org.gator.gator.metainfo.xml
+    sources:
+      - type: archive
+        path: gator-linux-bundle.tar.gz
+        dest: bundle
+      - type: file
+        path: croc
+      - type: file
+        path: org.gator.gator.png
+      - type: file
+        path: org.gator.gator.desktop
+      - type: file
+        path: org.gator.gator.metainfo.xml

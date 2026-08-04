@@ -65,5 +65,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: site
           publish_branch: gh-pages
-          force_orphan: true
+          # Keep Flatpak ostree/repo files published by linux-flatpak-release.
+          keep_files: true
           enable_jekyll: false

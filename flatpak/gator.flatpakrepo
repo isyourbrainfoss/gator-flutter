@@ -1,0 +1,8 @@
+[Flatpak Repo]
+Title=Gator (Flutter)
+Url=https://isyourbrainfoss.github.io/gator-flutter/
+Homepage=https://github.com/isyourbrainfoss/gator-flutter
+Comment=Community Flatpak builds of Gator Flutter for Linux
+Description=Material 3 frontend for croc encrypted P2P file transfer (Linux Flatpak + Android APK)
+Icon=https://raw.githubusercontent.com/isyourbrainfoss/gator-flutter/main/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+RuntimeRepo=https://dl.flathub.org/repo/flathub.flatpakrepo

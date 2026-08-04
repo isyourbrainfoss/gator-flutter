@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Gator
+Comment=Encrypted P2P file transfer (croc)
+Exec=gator
+Icon=org.gator.gator
+Terminal=false
+Type=Application
+Categories=Network;FileTransfer;Utility;
+StartupWMClass=gator

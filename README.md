@@ -1,6 +1,27 @@
-# Gator (Flutter / Android)
+# Gator (Flutter)
 
-Flutter Android port of [Gator](https://github.com/isyourbrainfoss/gator) — a Material 3 frontend for [croc](https://github.com/schollz/croc) encrypted P2P file transfer.
+Material 3 frontend for [croc](https://github.com/schollz/croc) encrypted P2P file transfer — Android APK and Linux Flatpak.
+Companion to the GTK app [Gator](https://github.com/isyourbrainfoss/gator).
+
+## Install on Linux (Flatpak)
+
+Same approach as [Flowlog](https://github.com/isyourbrainfoss/Flowlog): CI builds Flutter Linux for **x86_64** and **aarch64**, publishes an ostree remote on GitHub Pages, and attaches `.flatpak` bundles to releases when a tag matches.
+
+```bash
+flatpak remote-add --if-not-exists --user gator-flutter \
+  https://isyourbrainfoss.github.io/gator-flutter/gator.flatpakrepo
+flatpak install --user gator-flutter org.gator.gator
+flatpak run org.gator.gator
+```
+
+Bundles croc (no host install required). App id is `org.gator.gator` (distinct from GTK Flatpak `org.gator.Gator`).
+
+Local build:
+
+```bash
+./flatpak/build-flatpak.sh          # current arch
+./flatpak/build-flatpak.sh x86_64
+```
 
 ## Install on Android (Obtainium)
 

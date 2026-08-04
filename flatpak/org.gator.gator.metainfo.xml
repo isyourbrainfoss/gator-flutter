@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.gator.gator</id>
+  <name>Gator</name>
+  <summary>Secure P2P file transfers with croc</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>
+      Gator is a Material 3 frontend for the croc command-line tool, making
+      secure peer-to-peer file and text transfers simple on Linux and Android.
+    </p>
+    <p>
+      This Flatpak bundles the Flutter Linux build and a matching croc binary
+      so no host croc install is required. Use the same codes with the GTK
+      Gator app (org.gator.Gator) or plain croc 11+.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.gator.gator.desktop</launchable>
+  <url type="homepage">https://github.com/isyourbrainfoss/gator-flutter</url>
+  <url type="bugtracker">https://github.com/isyourbrainfoss/gator-flutter/issues</url>
+  <provides>
+    <binary>gator</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.5.13" date="2026-08-04">
+      <description>
+        <p>croc 11.0.1 and Linux Flatpak packaging.</p>
+      </description>
+    </release>
+  </releases>
+</component>

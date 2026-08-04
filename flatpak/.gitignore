@@ -1,0 +1,6 @@
+repo/
+build-*/
+gator-linux-bundle.tar.gz
+org.gator.gator.png
+croc
+org.gator.gator-*.flatpak

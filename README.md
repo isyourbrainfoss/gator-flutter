@@ -8,13 +8,15 @@ Companion to the GTK app [Gator](https://github.com/isyourbrainfoss/gator).
 Same approach as [Flowlog](https://github.com/isyourbrainfoss/Flowlog): CI builds Flutter Linux for **x86_64** and **aarch64**, publishes an ostree remote on GitHub Pages, and attaches `.flatpak` bundles to releases when a tag matches.
 
 ```bash
-flatpak remote-add --if-not-exists --user gator-flutter \
+flatpak remote-add --if-not-exists --user --no-gpg-verify gator-flutter \
   https://isyourbrainfoss.github.io/gator-flutter/gator.flatpakrepo
 flatpak install --user gator-flutter org.gator.gator
 flatpak run org.gator.gator
 ```
 
 Bundles croc (no host install required). App id is `org.gator.gator` (distinct from GTK Flatpak `org.gator.Gator`).
+
+The GitHub Pages ostree remote is currently unsigned, so `--no-gpg-verify` is required. Prefer the `.flatpak` bundle from a GitHub Release if you want a one-shot install.
 
 Local build:
 

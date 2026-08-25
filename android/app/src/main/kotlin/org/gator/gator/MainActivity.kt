@@ -5,10 +5,13 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -20,12 +23,16 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : FlutterFragmentActivity() {
     private var shareSink: EventChannel.EventSink? = null
     private var pendingShare: Map<String, Any?>? = null
     private var pendingQrResult: MethodChannel.Result? = null
     private lateinit var crocRunner: CrocRunner
+    private val ioExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val qrScanLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -63,7 +70,16 @@ class MainActivity : FlutterFragmentActivity() {
                         result.success(crocRunner.packagedCrocPath())
                     }
                     "verifyCroc" -> {
-                        result.success(crocRunner.verifyCroc())
+                        val replied = AtomicBoolean(false)
+                        crocRunner.verifyCrocAsync { version ->
+                            if (replied.compareAndSet(false, true)) {
+                                try {
+                                    result.success(version)
+                                } catch (_: Exception) {
+                                    // Already replied or engine gone.
+                                }
+                            }
+                        }
                     }
                     "getCrocEnv" -> {
                         result.success(crocRunner.crocEnvironment())
@@ -158,7 +174,46 @@ class MainActivity : FlutterFragmentActivity() {
                 }
             }
 
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, KEEPALIVE_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "start" -> {
+                        try {
+                            ContextCompat.startForegroundService(
+                                this,
+                                Intent(this, TransferKeepaliveService::class.java),
+                            )
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("START", e.message, null)
+                        }
+                    }
+                    "stop" -> {
+                        try {
+                            stopService(Intent(this, TransferKeepaliveService::class.java))
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("STOP", e.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
         handleShareIntent(intent)
+    }
+
+    override fun onDestroy() {
+        val callback = pendingQrResult
+        pendingQrResult = null
+        if (callback != null) {
+            try {
+                callback.error("DESTROYED", "Activity destroyed before QR scan completed", null)
+            } catch (_: Exception) {
+                // Already replied.
+            }
+        }
+        super.onDestroy()
     }
 
     private fun openDirectory(path: String): Boolean {
@@ -231,39 +286,72 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun handleShareIntent(intent: Intent?) {
         if (intent == null) return
-        val payload = extractSharePayload(intent) ?: return
-        pendingShare = payload
-        shareSink?.success(payload)
-    }
-
-    private fun extractSharePayload(intent: Intent): Map<String, Any?>? {
-        return when (intent.action) {
-            Intent.ACTION_SEND -> extractSingleShare(intent)
-            Intent.ACTION_SEND_MULTIPLE -> extractMultipleShare(intent)
-            else -> null
+        val action = intent.action
+        if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return
+        val type = intent.type
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+        val uri = extraStreamUri(intent)
+        val uris = extraStreamUris(intent)
+        ioExecutor.execute {
+            val payload = when (action) {
+                Intent.ACTION_SEND -> buildSingleShare(type, text, uri)
+                Intent.ACTION_SEND_MULTIPLE -> buildMultipleShare(uris)
+                else -> null
+            } ?: return@execute
+            mainHandler.post { deliverShare(payload) }
         }
     }
 
-    private fun extractSingleShare(intent: Intent): Map<String, Any?>? {
-        val type = intent.type ?: return null
-        if (type.startsWith("text/")) {
-            val text = intent.getStringExtra(Intent.EXTRA_TEXT)
-            if (!text.isNullOrBlank()) {
-                return mapOf("paths" to emptyList<String>(), "text" to text)
+    private fun deliverShare(payload: Map<String, Any?>) {
+        val sink = shareSink
+        if (sink != null) {
+            sink.success(payload)
+            pendingShare = null
+        } else {
+            pendingShare = payload
+        }
+    }
+
+    private fun buildSingleShare(
+        type: String?,
+        text: String?,
+        uri: Uri?,
+    ): Map<String, Any?>? {
+        if (uri != null) {
+            val path = copyUriToCache(uri)
+            if (path != null) {
+                return mapOf("paths" to listOf(path), "text" to text)
             }
-            return null
         }
-        val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: return null
-        val path = copyUriToCache(uri) ?: return null
-        return mapOf("paths" to listOf(path), "text" to null)
+        if (type?.startsWith("text/") == true && !text.isNullOrBlank()) {
+            return mapOf("paths" to emptyList<String>(), "text" to text)
+        }
+        return null
     }
 
-    private fun extractMultipleShare(intent: Intent): Map<String, Any?>? {
-        val uris = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+    private fun buildMultipleShare(uris: ArrayList<Uri>?): Map<String, Any?>? {
         if (uris.isNullOrEmpty()) return null
         val paths = uris.mapNotNull { copyUriToCache(it) }
         if (paths.isEmpty()) return null
         return mapOf("paths" to paths, "text" to null)
+    }
+
+    private fun extraStreamUri(intent: Intent): Uri? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        }
+    }
+
+    private fun extraStreamUris(intent: Intent): ArrayList<Uri>? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM)
+        }
     }
 
     private fun copyUriToCache(uri: Uri): String? {
@@ -271,7 +359,7 @@ class MainActivity : FlutterFragmentActivity() {
             val input = contentResolver.openInputStream(uri) ?: return null
             val name = queryDisplayName(uri) ?: "shared-${System.currentTimeMillis()}"
             val safeName = name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-            val outFile = File(cacheDir, "share-$safeName")
+            val outFile = File(cacheDir, "share-${System.nanoTime()}-$safeName")
             input.use { inputStream ->
                 FileOutputStream(outFile).use { output ->
                     inputStream.copyTo(output)
@@ -302,5 +390,6 @@ class MainActivity : FlutterFragmentActivity() {
         private const val SHARE_EVENT_CHANNEL = "org.gator.gator/share/events"
         private const val FILES_CHANNEL = "org.gator.gator/files"
         private const val QR_CHANNEL = "org.gator.gator/qr"
+        private const val KEEPALIVE_CHANNEL = "org.gator.gator/keepalive"
     }
 }

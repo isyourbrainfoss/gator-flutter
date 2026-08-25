@@ -24,19 +24,21 @@ class AdaptiveFilledButton extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < compactBreakpoint;
-        if (compact) {
-          return IconButton.filled(
-            onPressed: onPressed,
-            icon: icon,
-            tooltip: tooltip,
-          );
-        }
-        return FilledButton.icon(
-          onPressed: onPressed,
-          icon: icon,
-          label: label,
-          style: style,
-        );
+        final button = compact
+            ? FilledButton(
+                onPressed: onPressed,
+                style: (style ?? const ButtonStyle()).copyWith(
+                  minimumSize: const WidgetStatePropertyAll(Size(48, 40)),
+                ),
+                child: icon,
+              )
+            : FilledButton.icon(
+                onPressed: onPressed,
+                icon: icon,
+                label: label,
+                style: style,
+              );
+        return Tooltip(message: tooltip, child: button);
       },
     );
   }
@@ -65,24 +67,21 @@ class AdaptiveOutlinedButton extends StatelessWidget {
       builder: (context, constraints) {
         final compact =
             constraints.maxWidth < AdaptiveFilledButton.compactBreakpoint;
-        if (compact) {
-          return IconButton.outlined(
-            onPressed: onPressed,
-            icon: icon,
-            tooltip: tooltip,
-            style: style != null
-                ? IconButton.styleFrom(
-                    foregroundColor: style!.foregroundColor?.resolve({}),
-                  )
-                : null,
-          );
-        }
-        return OutlinedButton.icon(
-          onPressed: onPressed,
-          icon: icon,
-          label: label,
-          style: style,
-        );
+        final button = compact
+            ? OutlinedButton(
+                onPressed: onPressed,
+                style: (style ?? const ButtonStyle()).copyWith(
+                  minimumSize: const WidgetStatePropertyAll(Size(48, 40)),
+                ),
+                child: icon,
+              )
+            : OutlinedButton.icon(
+                onPressed: onPressed,
+                icon: icon,
+                label: label,
+                style: style,
+              );
+        return Tooltip(message: tooltip, child: button);
       },
     );
   }

@@ -14,7 +14,14 @@ class ReceiveState {
     this.currentFile,
     this.receivedText,
     this.pendingCompleteDialog = false,
+    this.errorMessage = '',
+    this.speed,
+    this.eta,
+    this.fileIndex,
+    this.fileCount,
   });
+
+  static const _unset = Object();
 
   final String code;
   final String saveDir;
@@ -26,14 +33,16 @@ class ReceiveState {
   final List<String> log;
   final bool showShellOutput;
   final String? currentFile;
-
-  /// Transient: set when CrocTextReceivedEvent arrives; cleared by UI after dialog.
   final String? receivedText;
-
-  /// Transient: set when CrocTransferCompleteEvent arrives (for files); cleared by UI after dialog.
   final bool pendingCompleteDialog;
+  final String errorMessage;
+  final String? speed;
+  final String? eta;
+  final int? fileIndex;
+  final int? fileCount;
 
-  bool get canStart => code.trim().isNotEmpty && saveDir.isNotEmpty;
+  bool get canStart =>
+      !transferring && code.trim().isNotEmpty && saveDir.isNotEmpty;
 
   ReceiveState copyWith({
     String? code,
@@ -45,9 +54,14 @@ class ReceiveState {
     TransferPhase? phase,
     List<String>? log,
     bool? showShellOutput,
-    String? currentFile,
-    String? receivedText,
+    Object? currentFile = _unset,
+    Object? receivedText = _unset,
     bool? pendingCompleteDialog,
+    String? errorMessage,
+    Object? speed = _unset,
+    Object? eta = _unset,
+    Object? fileIndex = _unset,
+    Object? fileCount = _unset,
   }) =>
       ReceiveState(
         code: code ?? this.code,
@@ -59,8 +73,20 @@ class ReceiveState {
         phase: phase ?? this.phase,
         log: log ?? this.log,
         showShellOutput: showShellOutput ?? this.showShellOutput,
-        currentFile: currentFile ?? this.currentFile,
-        receivedText: receivedText ?? this.receivedText,
-        pendingCompleteDialog: pendingCompleteDialog ?? this.pendingCompleteDialog,
+        currentFile: identical(currentFile, _unset)
+            ? this.currentFile
+            : currentFile as String?,
+        receivedText: identical(receivedText, _unset)
+            ? this.receivedText
+            : receivedText as String?,
+        pendingCompleteDialog:
+            pendingCompleteDialog ?? this.pendingCompleteDialog,
+        errorMessage: errorMessage ?? this.errorMessage,
+        speed: identical(speed, _unset) ? this.speed : speed as String?,
+        eta: identical(eta, _unset) ? this.eta : eta as String?,
+        fileIndex:
+            identical(fileIndex, _unset) ? this.fileIndex : fileIndex as int?,
+        fileCount:
+            identical(fileCount, _unset) ? this.fileCount : fileCount as int?,
       );
 }

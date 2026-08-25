@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:gator/core/logger.dart';
 import 'package:gator/features/send/send_notifier.dart';
 import 'package:gator/models/gator_settings.dart';
 import 'package:gator/models/transfer_state.dart';
@@ -9,99 +10,125 @@ import 'package:gator/providers/settings_provider.dart';
 import 'package:gator/providers/transfer_providers.dart';
 import 'package:gator/services/croc_parser.dart';
 import 'package:gator/services/croc_transfer_service.dart';
+import 'package:gator/services/transfer_keepalive.dart';
 
 /// Wires [SendNotifier] to [CrocTransferService].
-/// Controllers own the service + subscription but are UI-agnostic.
-/// Side effects (snacks, etc.) are driven from pages via ref.listen.
 class SendController {
   SendController(this.ref);
 
   final Ref ref;
   CrocTransferService? _service;
   StreamSubscription<CrocEvent>? _sub;
+  bool _starting = false;
 
   Future<void> startTransfer() async {
+    if (_starting || _service != null) return;
     final notifier = ref.read(sendProvider.notifier);
     final state = ref.read(sendProvider);
     if (!state.canStart) return;
 
-    _service = await createTransferService(ref);
-    if (_service == null) {
-      notifier.setError(
-        'croc is not available — install croc or check PATH',
-      );
-      return;
-    }
-
-    final settings = ref.read(settingsProvider).value ?? GatorSettings.defaults();
+    _starting = true;
     notifier.startTransfer();
-
-    _sub = _service!.events.listen((event) {
-      switch (event) {
-        case CrocLogEvent(:final message):
-          notifier.appendLog(message);
-          final file = extractFileName(message);
-          if (file != null) notifier.setCurrentFile(file);
-        case CrocCodeEvent(:final code):
-          notifier.setCode(code);
-        case CrocProgressEvent(:final fraction):
-          notifier.setProgress(fraction, ref.read(sendProvider).phase);
-        case CrocStatusEvent(:final phase):
-          notifier.setProgress(
-            ref.read(sendProvider).progress,
-            phaseFromString(phase),
-          );
-        case CrocFinishedEvent(:final exitCode):
-          final canceled = _service!.canceled;
-          notifier.finishTransfer(canceled: canceled);
-          if (!canceled &&
-              exitCode != 0 &&
-              ref.read(sendProvider).code.isEmpty) {
-            notifier.setError(
-              'Transfer failed (exit $exitCode). '
-              'See shell output below for details.',
-            );
-          }
-          _cleanup();
-        default:
-          break;
-      }
-    });
-
     try {
+      _service = await createTransferService(ref);
+      if (_service == null) {
+        notifier.setError(
+          'croc is not available — install croc or check PATH',
+        );
+        notifier.finishTransfer(canceled: true, exitCode: 1);
+        return;
+      }
+
+      final settings =
+          ref.read(settingsProvider).value ?? GatorSettings.defaults();
+
+      _sub = _service!.events.listen((event) {
+        switch (event) {
+          case CrocLogEvent(:final message):
+            notifier.appendLog(message);
+            final file = extractFileName(message);
+            if (file != null) notifier.applyProgress(currentFile: file);
+          case CrocCodeEvent(:final code):
+            notifier.setCode(code);
+            notifier.applyProgress(phase: TransferPhase.waiting);
+          case CrocProgressEvent(
+              :final fraction,
+              :final fileName,
+              :final speed,
+              :final eta,
+              :final fileIndex,
+              :final fileCount,
+              :final hashing,
+            ):
+            notifier.applyProgress(
+              fraction: fraction,
+              phase: hashing ? TransferPhase.hashing : TransferPhase.sending,
+              currentFile: fileName,
+              speed: speed,
+              eta: eta,
+              fileIndex: fileIndex,
+              fileCount: fileCount,
+            );
+          case CrocStatusEvent(:final phase):
+            final mapped = phaseFromString(phase);
+            if (mapped != TransferPhase.idle) {
+              notifier.applyProgress(phase: mapped);
+            }
+          case CrocFinishedEvent(:final exitCode):
+            final canceled = _service?.canceled ?? false;
+            if (!canceled && exitCode != 0) {
+              notifier.setError(
+                explainFromLogs(ref.read(sendProvider).log) ??
+                    'Transfer failed. Check the network and try again.',
+              );
+            }
+            notifier.finishTransfer(canceled: canceled, exitCode: exitCode);
+            unawaited(_cleanup());
+          default:
+            break;
+        }
+      });
+
+      await TransferKeepalive.start();
       await _service!.startSend(
         settings: settings,
         files: state.selectedFiles,
         excluded: state.excludedPaths,
         text: state.sendText,
       );
-    } catch (e) {
-      notifier.setError('Failed to start croc: $e');
-      notifier.finishTransfer(canceled: true);
-      _cleanup();
+    } catch (e, st) {
+      GatorLog.e('SendController', 'Failed to start transfer', e, st);
+      notifier.setError('Could not start the transfer engine.');
+      notifier.finishTransfer(canceled: true, exitCode: 1);
+      await _cleanup();
+    } finally {
+      _starting = false;
     }
   }
 
   Future<void> cancelTransfer() async {
     await _service?.cancel();
-    ref.read(sendProvider.notifier).finishTransfer(canceled: true);
-    _cleanup();
+    ref.read(sendProvider.notifier).finishTransfer(canceled: true, exitCode: -1);
+    await _cleanup();
   }
 
-  void _cleanup() {
-    _sub?.cancel();
+  Future<void> _cleanup() async {
+    await _sub?.cancel();
     _sub = null;
-    _service?.dispose();
+    final svc = _service;
     _service = null;
+    await TransferKeepalive.stop();
+    if (svc != null) {
+      await svc.dispose();
+    }
   }
 
-  /// Called via Riverpod ref.onDispose for proper lifecycle.
   void dispose() {
-    _cleanup();
+    unawaited(_cleanup());
   }
 }
 
-final sendControllerProvider = Provider.autoDispose<SendController>(
+final sendControllerProvider = Provider<SendController>(
   (ref) {
     final controller = SendController(ref);
     ref.onDispose(controller.dispose);

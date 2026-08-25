@@ -20,7 +20,7 @@ Run these on a physical Android device (arm64) or emulator after `flutter run`.
 | 8 | Share intent | Share image/file from Gallery to Gator | Appears in Send queue |
 | 9 | Share text | Share URL/text from browser to Gator | Text added to Send queue |
 | 10 | Preferences persist | Change relay/port, restart app | Settings retained |
-| 11 | Auto-accept off | Disable `--yes` in prefs, receive | croc prompts (if visible in log) |
+| 11 | Auto-accept | Receive a file | Transfer proceeds without a Y/n prompt (GUI always passes `--yes`) |
 | 12 | croc missing | Remove assets binary, reinstall | Croc missing screen shown |
 
 ## Automated checks

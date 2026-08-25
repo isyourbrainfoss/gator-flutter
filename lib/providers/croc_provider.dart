@@ -6,7 +6,8 @@ final crocBinaryLocatorProvider = Provider<CrocBinaryLocator>(
   (ref) => CrocBinaryLocator(),
 );
 
+/// Path of a locatable croc binary. Does not wait on `--version`.
 final crocAvailableProvider = FutureProvider<String?>((ref) async {
   final locator = ref.watch(crocBinaryLocatorProvider);
-  return locator.verify();
+  return locator.locate();
 });

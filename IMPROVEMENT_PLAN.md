@@ -62,7 +62,7 @@ Current status after initial agent work:
 ### Lower / Ongoing
 9. Update deps (careful with Riverpod 3).
 10. Expand tests (error paths, controller logic, new features).
-11. Croc binary update (→ 11.0.1 via tool/build script). Test thoroughly.
+11. Croc binary update (→ 11.3.2 via tool/build script). Test thoroughly.
 12. Other: localization, SAF for folders, more desktop love.
 
 ## Execution Order Recommendation

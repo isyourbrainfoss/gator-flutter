@@ -7,7 +7,7 @@ abstract final class GatorTheme {
   static const _lightOnPrimary = Color(0xFFFFFFFF);
   static const _lightSurface = Color(0xFFFAFAFA);
   static const _lightSurfaceContainerHighest = Color(0xFFE0E0E0);
-  static const _lightOutline = Color(0xFFC0C0C0);
+  static const _lightOutline = Color(0xFF767676);
   static const _lightError = Color(0xFFE01B24);
 
   // Dark palette
@@ -65,8 +65,17 @@ abstract final class GatorTheme {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
+      visualDensity: VisualDensity.adaptivePlatformDensity,
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        showCloseIcon: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      dialogTheme: const DialogThemeData(
+        actionsPadding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+      ),
       navigationBarTheme: NavigationBarThemeData(
-        indicatorColor: _lightSurfaceContainerHighest,
+        indicatorColor: Color(0xFFD4E4F9),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const TextStyle(
@@ -119,7 +128,11 @@ abstract final class GatorTheme {
       cardTheme: const CardThemeData(
         elevation: 0,
         color: Color(0xFFF5F5F5),
+        margin: EdgeInsets.zero,
         surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
       ),
     );
   }
@@ -171,8 +184,17 @@ abstract final class GatorTheme {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
+      visualDensity: VisualDensity.adaptivePlatformDensity,
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        showCloseIcon: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      dialogTheme: const DialogThemeData(
+        actionsPadding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+      ),
       navigationBarTheme: NavigationBarThemeData(
-        indicatorColor: _darkSurfaceContainerHighest,
+        indicatorColor: Color(0xFF1B3F6B),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const TextStyle(
@@ -225,7 +247,11 @@ abstract final class GatorTheme {
       cardTheme: const CardThemeData(
         elevation: 0,
         color: Color(0xFF2E2E2E),
+        margin: EdgeInsets.zero,
         surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
       ),
     );
   }

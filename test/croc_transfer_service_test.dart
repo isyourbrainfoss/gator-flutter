@@ -16,7 +16,7 @@ void main() {
       expect(args, isNot(contains('--transfers')));
     });
 
-    test('includes files and code', () {
+    test('includes files and does not put the secret on argv', () {
       final args = buildSendArgs(
         settings: GatorSettings.fromMap({'default_code': 'mycode', 'git': true}),
         files: ['/tmp/a.txt', '/tmp/b'],
@@ -24,8 +24,8 @@ void main() {
         text: '',
       );
       expect(args, contains('send'));
-      expect(args, contains('--code'));
-      expect(args, contains('mycode'));
+      expect(args, isNot(contains('--code')));
+      expect(args, isNot(contains('mycode')));
       expect(args, contains('--git'));
       expect(args, contains('/tmp/a.txt'));
       expect(args, contains('--exclude'));

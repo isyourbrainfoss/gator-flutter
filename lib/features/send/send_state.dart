@@ -28,7 +28,13 @@ class SendState {
     this.showQrImage = true,
     this.errorMessage = '',
     this.currentFile,
+    this.speed,
+    this.eta,
+    this.fileIndex,
+    this.fileCount,
   });
+
+  static const _unset = Object();
 
   final List<SendItem> items;
   final String sendText;
@@ -43,11 +49,16 @@ class SendState {
   final bool showQrImage;
   final String errorMessage;
   final String? currentFile;
+  final String? speed;
+  final String? eta;
+  final int? fileIndex;
+  final int? fileCount;
 
   bool get canStart =>
       !transferring &&
-      (sendText.isNotEmpty ||
-          items.any((i) => !i.excluded && !i.sent));
+      (sendText.isNotEmpty || items.any((i) => !i.excluded && !i.sent));
+
+  bool get hasQueue => sendText.isNotEmpty || items.isNotEmpty;
 
   List<String> get selectedFiles =>
       items.where((i) => !i.excluded).map((i) => i.path).toList();
@@ -68,7 +79,11 @@ class SendState {
     bool? showShellOutput,
     bool? showQrImage,
     String? errorMessage,
-    String? currentFile,
+    Object? currentFile = _unset,
+    Object? speed = _unset,
+    Object? eta = _unset,
+    Object? fileIndex = _unset,
+    Object? fileCount = _unset,
   }) =>
       SendState(
         items: items ?? this.items,
@@ -83,6 +98,14 @@ class SendState {
         showShellOutput: showShellOutput ?? this.showShellOutput,
         showQrImage: showQrImage ?? this.showQrImage,
         errorMessage: errorMessage ?? this.errorMessage,
-        currentFile: currentFile ?? this.currentFile,
+        currentFile: identical(currentFile, _unset)
+            ? this.currentFile
+            : currentFile as String?,
+        speed: identical(speed, _unset) ? this.speed : speed as String?,
+        eta: identical(eta, _unset) ? this.eta : eta as String?,
+        fileIndex:
+            identical(fileIndex, _unset) ? this.fileIndex : fileIndex as int?,
+        fileCount:
+            identical(fileCount, _unset) ? this.fileCount : fileCount as int?,
       );
 }

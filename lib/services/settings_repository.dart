@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,17 +48,53 @@ class SettingsRepository {
   Future<String> resolveSaveDir(GatorSettings settings) async {
     final saved = settings.saveDir;
     if (saved != null && saved.isNotEmpty) {
-      return saved;
+      if (await _isWritableDir(saved)) return saved;
+      GatorLog.w('SettingsRepository', 'Saved save_dir is not writable: $saved');
+    }
+    if (Platform.isAndroid) {
+      try {
+        final ext = await getExternalStorageDirectory();
+        if (ext != null) {
+          final path = '${ext.path}/Gator';
+          await Directory(path).create(recursive: true);
+          return path;
+        }
+      } catch (e) {
+        GatorLog.w('SettingsRepository', 'Android app-files dir failed: $e');
+      }
     }
     try {
       final downloads = await getDownloadsDirectory();
       if (downloads != null) {
-        return '${downloads.path}/Gator';
+        final path = '${downloads.path}/Gator';
+        await Directory(path).create(recursive: true);
+        return path;
       }
-    } catch (_) {
-      // getDownloadsDirectory is unavailable in some test/desktop environments.
+    } catch (e) {
+      GatorLog.w('SettingsRepository', 'getDownloadsDirectory failed: $e');
     }
-    final docs = await getApplicationDocumentsDirectory();
-    return '${docs.path}/Gator';
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      final path = '${docs.path}/Gator';
+      await Directory(path).create(recursive: true);
+      return path;
+    } catch (e) {
+      GatorLog.w('SettingsRepository', 'getApplicationDocumentsDirectory failed: $e');
+    }
+    return getDefaultSaveDirLabel();
+  }
+
+  static Future<bool> _isWritableDir(String path) async {
+    try {
+      final dir = Directory(path);
+      if (!await dir.exists()) await dir.create(recursive: true);
+      final probe = File('${dir.path}/.gator-write-test');
+      await probe.writeAsString('ok');
+      await probe.delete();
+      return true;
+    } catch (e) {
+      GatorLog.w('SettingsRepository', 'Write probe failed for $path: $e');
+      return false;
+    }
   }
 }

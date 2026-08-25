@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:gator/core/constants.dart';
+import 'package:gator/core/logger.dart';
 import 'package:gator/features/receive/receive_state.dart';
 import 'package:gator/models/transfer_state.dart';
 import 'package:gator/providers/settings_provider.dart';
@@ -14,8 +15,12 @@ class ReceiveNotifier extends Notifier<ReceiveState> {
   }
 
   Future<void> _loadSaveDir() async {
-    final dir = await ref.read(settingsProvider.notifier).resolveSaveDir();
-    state = state.copyWith(saveDir: dir);
+    try {
+      final dir = await ref.read(settingsProvider.notifier).resolveSaveDir();
+      state = state.copyWith(saveDir: dir);
+    } catch (e, st) {
+      GatorLog.e('ReceiveNotifier', 'resolveSaveDir failed', e, st);
+    }
   }
 
   void configure({required bool showShellOutput}) {
@@ -38,16 +43,41 @@ class ReceiveNotifier extends Notifier<ReceiveState> {
       complete: false,
       canceled: false,
       progress: 0,
-      phase: TransferPhase.receiving,
+      phase: TransferPhase.connecting,
       log: [],
       currentFile: null,
       receivedText: null,
       pendingCompleteDialog: false,
+      errorMessage: '',
+      speed: null,
+      eta: null,
+      fileIndex: null,
+      fileCount: null,
     );
   }
 
-  void setProgress(double p, TransferPhase phase) =>
-      state = state.copyWith(progress: p, phase: phase);
+  void setError(String message) =>
+      state = state.copyWith(errorMessage: message);
+
+  void applyProgress({
+    double? fraction,
+    TransferPhase? phase,
+    String? currentFile,
+    String? speed,
+    String? eta,
+    int? fileIndex,
+    int? fileCount,
+  }) {
+    state = state.copyWith(
+      progress: fraction ?? state.progress,
+      phase: phase ?? state.phase,
+      currentFile: currentFile ?? state.currentFile,
+      speed: speed ?? state.speed,
+      eta: eta ?? state.eta,
+      fileIndex: fileIndex ?? state.fileIndex,
+      fileCount: fileCount ?? state.fileCount,
+    );
+  }
 
   void appendLog(String line) {
     final next = [...state.log, line];
@@ -57,8 +87,6 @@ class ReceiveNotifier extends Notifier<ReceiveState> {
           : next,
     );
   }
-
-  void setCurrentFile(String? file) => state = state.copyWith(currentFile: file);
 
   void finishTransfer({required bool canceled, int exitCode = 0}) {
     final success = !canceled && exitCode == 0;
@@ -71,18 +99,15 @@ class ReceiveNotifier extends Notifier<ReceiveState> {
           : success
               ? TransferPhase.complete
               : TransferPhase.error,
-      // Clear transients on finish too (defensive)
-      receivedText: null,
-      pendingCompleteDialog: false,
+      receivedText: state.receivedText,
+      pendingCompleteDialog: state.pendingCompleteDialog,
     );
   }
 
-  /// Called by controller on CrocTextReceivedEvent. UI layer listens and shows dialog.
   void onTextReceived(String text) {
     state = state.copyWith(receivedText: text);
   }
 
-  /// Called by controller on CrocTransferCompleteEvent. UI layer listens and shows dialog + optional open.
   void onTransferComplete() {
     state = state.copyWith(pendingCompleteDialog: true);
   }
@@ -97,6 +122,24 @@ class ReceiveNotifier extends Notifier<ReceiveState> {
     if (state.pendingCompleteDialog) {
       state = state.copyWith(pendingCompleteDialog: false);
     }
+  }
+
+  void resetTransferUi() {
+    state = state.copyWith(
+      transferring: false,
+      complete: false,
+      canceled: false,
+      progress: 0,
+      phase: TransferPhase.idle,
+      errorMessage: '',
+      currentFile: null,
+      speed: null,
+      eta: null,
+      fileIndex: null,
+      fileCount: null,
+      receivedText: null,
+      pendingCompleteDialog: false,
+    );
   }
 }
 

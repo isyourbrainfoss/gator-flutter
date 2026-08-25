@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FLATPAK_DIR="$ROOT/flatpak"
 ARCH="${1:-$(uname -m)}"
-CROC_VERSION="${CROC_VERSION:-11.0.1}"
+CROC_VERSION="${CROC_VERSION:-11.3.2}"
 
 case "$ARCH" in
   x86_64|amd64)

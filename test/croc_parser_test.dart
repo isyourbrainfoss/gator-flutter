@@ -6,15 +6,16 @@ import 'package:gator/services/croc_parser.dart';
 void main() {
   group('parseProgressFraction', () {
     test('parses progress lines', () {
-      expect(parseProgressFraction('Sending  45%'), 0.45);
+      expect(parseProgressFraction('Sending  45%'), isNull);
       expect(
         parseProgressFraction(
           'download.zip  20% |████                | (1.7/8.3 GB, 117 MB/s)',
         ),
         0.20,
       );
-      expect(parseProgressFraction('Hashing download.zip  99%'), 0.99);
+      expect(parseProgressFraction('Hashing download.zip  99% |█|'), 0.99);
       expect(parseProgressFraction('no progress here'), isNull);
+      expect(parseProgressFraction("Resume 'f' (12.5%)?"), isNull);
     });
   });
 
@@ -51,9 +52,9 @@ void main() {
 
   group('buildGlobalArgs', () {
     test('basic defaults omit flags', () {
-      // defaults() has yes=true (so includes --yes), but omits empty/zero/falsy optionals
       final args = buildGlobalArgs(GatorSettings.defaults());
       expect(args, contains('--yes'));
+      expect(args, contains('--ignore-stdin'));
       expect(args, isNot(contains('--relay')));
       expect(args, isNot(contains('--multicast')));
       expect(args, isNot(contains('--curve')));
@@ -99,6 +100,23 @@ void main() {
         '1234-lion-stop-sofia',
       );
     });
+
+    test('extracts code from croc 11.2.4+ send instructions', () {
+      expect(
+        extractCrocCodeFromLine('  croc 5015-lucas-valid-balance'),
+        '5015-lucas-valid-balance',
+      );
+      expect(
+        extractCrocCodeFromLine(
+          '  croc --relay 1.2.3.4:9009 acid-pink-fostered-succeeding',
+        ),
+        'acid-pink-fostered-succeeding',
+      );
+      expect(
+        extractCrocCodeFromLine('https://getcroc.com/?code=acid-pink'),
+        isNull,
+      );
+    });
   });
 
   group('normalizeCrocCode', () {
@@ -115,27 +133,48 @@ void main() {
   group('detectTransferPhase', () {
     test('detects phases', () {
       expect(detectTransferPhase('Hashing download.zip  45%'), 'hashing');
-      expect(detectTransferPhase('download.zip  20% |██'), 'sending');
+      expect(detectTransferPhase('download.zip  20% |██'), isNull);
       expect(detectTransferPhase('Receiving file (foo)  50%'), 'receiving');
-      expect(detectTransferPhase('Code is: abc'), isNull);
+      expect(detectTransferPhase('Receiving (<-127.0.0.1:1)'), 'receiving');
+      expect(detectTransferPhase('Sending (->127.0.0.1:1)'), 'sending');
+      expect(detectTransferPhase('Code is: abc'), 'waiting');
+      expect(detectTransferPhase('Looking for sender...'), 'connecting');
+      expect(detectTransferPhase('Retrying securely...'), 'retrying');
     });
   });
 
   group('buildReceiveArgs', () {
-    test('respects yes pref false', () {
+    test('always passes --yes and --ignore-stdin for the GUI', () {
       final args = buildReceiveArgs(
         GatorSettings.fromMap({'yes': false, 'relay': ''}),
       );
       expect(args.first, crocBinary);
       expect(args, isNot(contains('--relay')));
-      expect(args, isNot(contains('--yes')));
-      expect(args.length, 1);
+      expect(args, contains('--yes'));
+      expect(args, contains('--ignore-stdin'));
     });
 
     test('includes yes when enabled', () {
       final args = buildReceiveArgs(GatorSettings.fromMap({'yes': true}));
       expect(args, contains('--yes'));
       expect(args, isNot(contains('abc-code')));
+    });
+
+    test('passes --out when provided', () {
+      final args = buildReceiveArgs(
+        GatorSettings.defaults(),
+        out: '/tmp/gator',
+      );
+      expect(args, contains('--out'));
+      expect(args, contains('/tmp/gator'));
+    });
+
+    test('passes --rename and omits --overwrite', () {
+      final args = buildGlobalArgs(
+        GatorSettings.fromMap({'rename': true, 'overwrite': true}),
+      );
+      expect(args, contains('--rename'));
+      expect(args, isNot(contains('--overwrite')));
     });
   });
 
@@ -180,6 +219,57 @@ void main() {
       );
       expect(extractFileName('some other log line'), isNull);
       expect(extractFileName('Receiving file (file-with-dashes.txt)'), 'file-with-dashes.txt');
+      expect(
+        extractFileName(
+          'download.zip  20% |████                | (1.7/8.3 GB, 117 MB/s)',
+        ),
+        'download.zip',
+      );
+    });
+  });
+
+  group('parseProgressLine', () {
+    test('parses speed ETA and file index', () {
+      final info = parseProgressLine(
+        'file.tar  64% |████████████        | (100/153 GB, 8.5 MB/s) [2h59m57s:1h45m0s]  2/5',
+      );
+      expect(info, isNotNull);
+      expect(info!.fraction, closeTo(0.64, 0.001));
+      expect(info.fileName, 'file.tar');
+      expect(info.speed, '8.5 MB/s');
+      expect(info.eta, '1h45m0s');
+      expect(info.fileIndex, 2);
+      expect(info.fileCount, 5);
+    });
+  });
+
+  group('isCrocStatusLine', () {
+    test('filters v11 status lines', () {
+      expect(isCrocStatusLine('Looking for sender...'), isTrue);
+      expect(isCrocStatusLine('Authenticating code...'), isTrue);
+      expect(isCrocStatusLine('On the other computer, run:'), isTrue);
+      expect(isCrocStatusLine('hello from sender'), isFalse);
+    });
+  });
+
+  group('explainCrocFailure', () {
+    test('maps known phrases', () {
+      expect(
+        explainCrocFailure('code is invalid'),
+        contains('invalid or expired'),
+      );
+      expect(
+        explainCrocFailure('unsupported PAKE version'),
+        contains('older croc'),
+      );
+      expect(explainCrocFailure('hello'), isNull);
+    });
+  });
+
+  group('sendEnvForCode', () {
+    test('sets CROC_SECRET and skips empty', () {
+      expect(sendEnvForCode('gator-test-code'), {'CROC_SECRET': 'gator-test-code'});
+      expect(sendEnvForCode(''), isEmpty);
     });
   });
 }

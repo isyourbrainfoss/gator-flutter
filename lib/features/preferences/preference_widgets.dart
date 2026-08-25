@@ -20,7 +20,7 @@ class PreferenceSectionHeader extends StatelessWidget {
   }
 }
 
-/// Text preference row that saves when the user submits or finishes editing.
+/// Text preference row that saves on submit, unfocus, and dispose if dirty.
 class PreferenceTextField extends StatefulWidget {
   const PreferenceTextField({
     super.key,
@@ -45,28 +45,41 @@ class PreferenceTextField extends StatefulWidget {
 
 class _PreferenceTextFieldState extends State<PreferenceTextField> {
   late final TextEditingController _controller;
+  late final FocusNode _focus;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.value);
+    _focus = FocusNode();
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _save();
+    });
   }
 
   @override
   void didUpdateWidget(PreferenceTextField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.value != widget.value) {
+    if (oldWidget.value != widget.value && _controller.text != widget.value) {
       _controller.text = widget.value;
     }
   }
 
   @override
   void dispose() {
+    if (_controller.text != widget.value) {
+      widget.onSubmitted(_controller.text);
+    }
+    _focus.dispose();
     _controller.dispose();
     super.dispose();
   }
 
-  void _save() => widget.onSubmitted(_controller.text);
+  void _save() {
+    if (_controller.text != widget.value) {
+      widget.onSubmitted(_controller.text);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -78,11 +91,16 @@ class _PreferenceTextFieldState extends State<PreferenceTextField> {
           if (widget.subtitle != null) Text(widget.subtitle!),
           TextField(
             controller: _controller,
+            focusNode: _focus,
             obscureText: widget.obscure,
             keyboardType: widget.keyboardType,
             decoration: const InputDecoration(isDense: true),
             onSubmitted: (_) => _save(),
             onEditingComplete: _save,
+            onTapOutside: (_) {
+              _focus.unfocus();
+              _save();
+            },
           ),
         ],
       ),
@@ -103,7 +121,7 @@ class PreferenceSwitch extends StatelessWidget {
   final String title;
   final String? subtitle;
   final bool value;
-  final void Function(bool) onChanged;
+  final void Function(bool)? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +134,7 @@ class PreferenceSwitch extends StatelessWidget {
   }
 }
 
-/// Hash algorithm dropdown matching GTK options plus xxhash.
+/// Hash algorithm dropdown matching croc (`xxhash`, `imohash`, `md5`, `highway`).
 class PreferenceHashDropdown extends StatelessWidget {
   const PreferenceHashDropdown({
     super.key,
@@ -132,6 +150,7 @@ class PreferenceHashDropdown extends StatelessWidget {
     'imohash': 'imohash',
     'md5': 'md5',
     'xxhash': 'xxhash',
+    'highway': 'highway',
   };
 
   String get _dropdownValue {
@@ -143,6 +162,7 @@ class PreferenceHashDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       title: const Text('Hash algorithm'),
+      subtitle: const Text('--hash'),
       trailing: DropdownButton<String>(
         value: _dropdownValue,
         items: _options.entries

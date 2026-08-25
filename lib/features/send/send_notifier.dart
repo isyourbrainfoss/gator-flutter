@@ -17,11 +17,12 @@ class SendNotifier extends Notifier<SendState> {
 
   void addFiles(List<String> paths, {bool exclude = false}) {
     final existing = state.items.map((i) => i.path).toSet();
-    final newItems = [
-      ...state.items,
-      for (final p in paths)
-        if (!existing.contains(p)) SendItem(path: p, excluded: exclude),
-    ];
+    final newItems = [...state.items];
+    for (final p in paths) {
+      if (existing.add(p)) {
+        newItems.add(SendItem(path: p, excluded: exclude));
+      }
+    }
     state = state.copyWith(items: newItems);
   }
 
@@ -35,10 +36,7 @@ class SendNotifier extends Notifier<SendState> {
 
   void removeText() => state = state.copyWith(sendText: '');
 
-  void clearAll() => state = const SendState(
-        showShellOutput: false,
-        showQrImage: true,
-      ).copyWith(
+  void clearAll() => state = SendState(
         showShellOutput: state.showShellOutput,
         showQrImage: state.showQrImage,
       );
@@ -49,11 +47,15 @@ class SendNotifier extends Notifier<SendState> {
       complete: false,
       canceled: false,
       progress: 0,
-      phase: TransferPhase.sending,
+      phase: TransferPhase.connecting,
       code: '',
       log: [],
       errorMessage: '',
       currentFile: null,
+      speed: null,
+      eta: null,
+      fileIndex: null,
+      fileCount: null,
     );
   }
 
@@ -62,10 +64,25 @@ class SendNotifier extends Notifier<SendState> {
 
   void setCode(String code) => state = state.copyWith(code: code);
 
-  void setCurrentFile(String? file) => state = state.copyWith(currentFile: file);
-
-  void setProgress(double p, TransferPhase phase) =>
-      state = state.copyWith(progress: p, phase: phase);
+  void applyProgress({
+    double? fraction,
+    TransferPhase? phase,
+    String? currentFile,
+    String? speed,
+    String? eta,
+    int? fileIndex,
+    int? fileCount,
+  }) {
+    state = state.copyWith(
+      progress: fraction ?? state.progress,
+      phase: phase ?? state.phase,
+      currentFile: currentFile ?? state.currentFile,
+      speed: speed ?? state.speed,
+      eta: eta ?? state.eta,
+      fileIndex: fileIndex ?? state.fileIndex,
+      fileCount: fileCount ?? state.fileCount,
+    );
+  }
 
   void appendLog(String line) {
     final next = [...state.log, line];
@@ -76,14 +93,19 @@ class SendNotifier extends Notifier<SendState> {
     );
   }
 
-  void finishTransfer({required bool canceled}) {
+  void finishTransfer({required bool canceled, int exitCode = 0}) {
+    final success = !canceled && exitCode == 0;
     state = state.copyWith(
       transferring: false,
-      complete: !canceled,
+      complete: success,
       canceled: canceled,
-      phase: canceled ? TransferPhase.error : TransferPhase.complete,
+      phase: canceled
+          ? TransferPhase.error
+          : success
+              ? TransferPhase.complete
+              : TransferPhase.error,
       items: state.items
-          .map((i) => i.excluded ? i : i.copyWith(sent: !canceled))
+          .map((i) => i.excluded ? i : i.copyWith(sent: success))
           .toList(),
     );
   }
@@ -96,6 +118,13 @@ class SendNotifier extends Notifier<SendState> {
       progress: 0,
       phase: TransferPhase.idle,
       code: '',
+      errorMessage: '',
+      currentFile: null,
+      speed: null,
+      eta: null,
+      fileIndex: null,
+      fileCount: null,
+      items: state.items.map((i) => i.copyWith(sent: false)).toList(),
     );
   }
 }

@@ -31,45 +31,47 @@ class SendingOptionsSection extends ConsumerWidget {
         ),
         PreferenceSwitch(
           title: 'Zip folder before sending',
+          subtitle: '--zip',
           value: settings.zipFolder,
           onChanged: (value) => notifier.updateSetting('zip_folder', value),
         ),
-        if (settings.showAdvancedSettings) ...[
-          PreferenceSwitch(
-            title: 'Disable local relay',
-            value: settings.noLocal,
-            onChanged: (value) => notifier.updateSetting('no_local', value),
-          ),
-          PreferenceSwitch(
-            title: 'Disable multiplexing',
-            value: settings.noMulti,
-            onChanged: (value) => notifier.updateSetting('no_multi', value),
-          ),
-          PreferenceSwitch(
-            title: 'Respect .gitignore',
-            value: settings.git,
-            onChanged: (value) => notifier.updateSetting('git', value),
-          ),
-          PreferenceTextField(
-            title: 'Base port for relay',
-            subtitle: '0 = croc default ($crocDefaultPort)',
-            value: '${settings.port}',
-            keyboardType: TextInputType.number,
-            onSubmitted: (value) =>
-                notifier.updateSetting('port', int.tryParse(value) ?? 0),
-          ),
-          PreferenceTextField(
-            title: 'Number of ports for transfers',
-            subtitle: '0 = croc default ($crocDefaultTransfers)',
-            value: '${settings.transfers}',
-            keyboardType: TextInputType.number,
-            onSubmitted: (value) =>
-                notifier.updateSetting('transfers', int.tryParse(value) ?? 0),
-          ),
-        ],
         PreferenceSwitch(
-          title: 'Show receive code as QR',
-          subtitle: 'Shows QR code in shell output',
+          title: 'Disable local relay',
+          subtitle: '--no-local',
+          value: settings.noLocal,
+          onChanged: (value) => notifier.updateSetting('no_local', value),
+        ),
+        PreferenceSwitch(
+          title: 'Disable multiplexing',
+          subtitle: '--no-multi',
+          value: settings.noMulti,
+          onChanged: (value) => notifier.updateSetting('no_multi', value),
+        ),
+        PreferenceSwitch(
+          title: 'Respect .gitignore',
+          subtitle: '--git',
+          value: settings.git,
+          onChanged: (value) => notifier.updateSetting('git', value),
+        ),
+        PreferenceTextField(
+          title: 'Base port for relay',
+          subtitle: '0 = croc default ($crocDefaultPort)',
+          value: '${settings.port}',
+          keyboardType: TextInputType.number,
+          onSubmitted: (value) =>
+              notifier.updateSetting('port', int.tryParse(value) ?? 0),
+        ),
+        PreferenceTextField(
+          title: 'Number of ports for transfers',
+          subtitle: '0 = croc default ($crocDefaultTransfers)',
+          value: '${settings.transfers}',
+          keyboardType: TextInputType.number,
+          onSubmitted: (value) =>
+              notifier.updateSetting('transfers', int.tryParse(value) ?? 0),
+        ),
+        PreferenceSwitch(
+          title: 'Show croc web-receive URL as QR',
+          subtitle: 'Passes --qr (web URL, not the transfer code)',
           value: settings.qr,
           onChanged: (value) => notifier.updateSetting('qr', value),
         ),

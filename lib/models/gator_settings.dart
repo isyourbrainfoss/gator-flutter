@@ -15,6 +15,7 @@ class GatorSettings {
     this.saveDir,
     this.yes = true,
     this.overwrite = false,
+    this.rename = false,
     this.debug = false,
     this.noCompress = false,
     this.ask = false,
@@ -45,12 +46,14 @@ class GatorSettings {
     this.quiet = false,
     this.disableClipboard = false,
     this.extendedClipboard = false,
+    this.transport = '',
   });
 
   final String colorScheme;
   final String? saveDir;
   final bool yes;
   final bool overwrite;
+  final bool rename;
   final bool debug;
   final bool noCompress;
   final bool ask;
@@ -81,6 +84,7 @@ class GatorSettings {
   final bool quiet;
   final bool disableClipboard;
   final bool extendedClipboard;
+  final String transport;
 
   factory GatorSettings.defaults() => const GatorSettings();
 
@@ -99,6 +103,7 @@ class GatorSettings {
       saveDir: m['save_dir'] as String?,
       yes: (m['yes'] as bool?) ?? true,
       overwrite: (m['overwrite'] as bool?) ?? false,
+      rename: (m['rename'] as bool?) ?? false,
       debug: (m['debug'] as bool?) ?? false,
       noCompress: (m['no_compress'] as bool?) ?? false,
       ask: (m['ask'] as bool?) ?? false,
@@ -129,14 +134,18 @@ class GatorSettings {
       quiet: (m['quiet'] as bool?) ?? false,
       disableClipboard: (m['disable_clipboard'] as bool?) ?? false,
       extendedClipboard: (m['extended_clipboard'] as bool?) ?? false,
+      transport: (m['transport'] as String?) ?? '',
     );
   }
 
+  static const _unset = Object();
+
   GatorSettings copyWith({
     String? colorScheme,
-    String? saveDir,
+    Object? saveDir = _unset,
     bool? yes,
     bool? overwrite,
+    bool? rename,
     bool? debug,
     bool? noCompress,
     bool? ask,
@@ -167,12 +176,14 @@ class GatorSettings {
     bool? quiet,
     bool? disableClipboard,
     bool? extendedClipboard,
+    String? transport,
   }) {
     return GatorSettings(
       colorScheme: colorScheme ?? this.colorScheme,
-      saveDir: saveDir ?? this.saveDir,
+      saveDir: identical(saveDir, _unset) ? this.saveDir : saveDir as String?,
       yes: yes ?? this.yes,
       overwrite: overwrite ?? this.overwrite,
+      rename: rename ?? this.rename,
       debug: debug ?? this.debug,
       noCompress: noCompress ?? this.noCompress,
       ask: ask ?? this.ask,
@@ -203,6 +214,7 @@ class GatorSettings {
       quiet: quiet ?? this.quiet,
       disableClipboard: disableClipboard ?? this.disableClipboard,
       extendedClipboard: extendedClipboard ?? this.extendedClipboard,
+      transport: transport ?? this.transport,
     );
   }
 
@@ -218,6 +230,8 @@ class GatorSettings {
         return copyWith(yes: value as bool);
       case 'overwrite':
         return copyWith(overwrite: value as bool);
+      case 'rename':
+        return copyWith(rename: value as bool);
       case 'debug':
         return copyWith(debug: value as bool);
       case 'no_compress':
@@ -284,6 +298,8 @@ class GatorSettings {
         return copyWith(disableClipboard: value as bool);
       case 'extended_clipboard':
         return copyWith(extendedClipboard: value as bool);
+      case 'transport':
+        return copyWith(transport: value as String);
       default:
         return this;
     }
@@ -296,6 +312,7 @@ class GatorSettings {
         'save_dir': saveDir,
         'yes': yes,
         'overwrite': overwrite,
+        'rename': rename,
         'debug': debug,
         'no_compress': noCompress,
         'ask': ask,
@@ -326,6 +343,7 @@ class GatorSettings {
         'quiet': quiet,
         'disable_clipboard': disableClipboard,
         'extended_clipboard': extendedClipboard,
+        'transport': transport,
       };
 
   /// Alias for toMap() usable by arg builders.
@@ -336,6 +354,11 @@ class GatorSettings {
   Map<String, dynamic> toDiffMap() {
     final full = toMap();
     final defs = GatorSettings.defaults().toMap();
+    // Android merge treats a missing key as internal_dns=true. Persist false
+    // so a user who turned the resolver off does not get it forced back on.
+    if (Platform.isAndroid) {
+      defs['internal_dns'] = true;
+    }
     final diff = <String, dynamic>{};
     for (final entry in full.entries) {
       if (entry.value != defs[entry.key]) {
@@ -379,7 +402,7 @@ class GatorSettings {
 
     s['multicast'] = (s['multicast'] as String? ?? '').trim();
     final h = (s['hash'] as String? ?? '').trim();
-    if (h.isNotEmpty && !{'xxhash', 'imohash', 'md5'}.contains(h)) {
+    if (h.isNotEmpty && !{'xxhash', 'imohash', 'md5', 'highway'}.contains(h)) {
       s['hash'] = defaultHash;
     } else {
       s['hash'] = h;
@@ -395,16 +418,11 @@ class GatorSettings {
 
   static Map<String, dynamic> _migrateStale(Map<String, dynamic> settings) {
     final s = Map<String, dynamic>.from(settings);
+    // Only rewrite known-bad legacy public-relay IPs. Do not collapse
+    // current croc defaults (xxhash / port 9009 / …) — that made the UI
+    // look unsaved after a restart.
     if (s['relay'] == legacyRelay) s['relay'] = '';
     if (s['relay6'] == legacyRelay6) s['relay6'] = '';
-    if (s['multicast'] == crocDefaultMulticast) s['multicast'] = '';
-    if (s['hash'] == crocDefaultHash) s['hash'] = '';
-    if (s['curve'] == crocDefaultCurve) s['curve'] = '';
-    if (s['port'] == crocDefaultPort) s['port'] = 0;
-    if (s['transfers'] == crocDefaultTransfers) s['transfers'] = 0;
-    if (Platform.isAndroid && s['internal_dns'] != true) {
-      s['internal_dns'] = true;
-    }
     return s;
   }
 
@@ -414,6 +432,7 @@ class GatorSettings {
     'save_dir': null,
     'yes': true,
     'overwrite': false,
+    'rename': false,
     'debug': false,
     'no_compress': false,
     'ask': false,
@@ -444,6 +463,7 @@ class GatorSettings {
     'quiet': false,
     'disable_clipboard': false,
     'extended_clipboard': false,
+    'transport': '',
   };
 
   @override
@@ -455,6 +475,7 @@ class GatorSettings {
           saveDir == other.saveDir &&
           yes == other.yes &&
           overwrite == other.overwrite &&
+          rename == other.rename &&
           debug == other.debug &&
           noCompress == other.noCompress &&
           ask == other.ask &&
@@ -484,7 +505,8 @@ class GatorSettings {
           testing == other.testing &&
           quiet == other.quiet &&
           disableClipboard == other.disableClipboard &&
-          extendedClipboard == other.extendedClipboard;
+          extendedClipboard == other.extendedClipboard &&
+          transport == other.transport;
 
   @override
   int get hashCode => Object.hashAll([
@@ -492,6 +514,7 @@ class GatorSettings {
         saveDir,
         yes,
         overwrite,
+        rename,
         debug,
         noCompress,
         ask,
@@ -522,6 +545,7 @@ class GatorSettings {
         quiet,
         disableClipboard,
         extendedClipboard,
+        transport,
       ]);
 
   @override

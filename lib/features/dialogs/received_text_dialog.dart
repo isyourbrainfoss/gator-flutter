@@ -6,11 +6,16 @@ import 'package:gator/widgets/gator_snackbar.dart';
 Future<void> showReceivedTextDialog(BuildContext context, String text) {
   return showDialog(
     context: context,
+    barrierDismissible: false,
     builder: (context) => AlertDialog(
+      icon: const Icon(Icons.notes),
       title: const Text('Received Text'),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: SelectableText(text),
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.5,
+          maxWidth: 480,
+        ),
+        child: SingleChildScrollView(child: SelectableText(text)),
       ),
       actions: [
         TextButton(

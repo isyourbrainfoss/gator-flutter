@@ -6,4 +6,4 @@ Icon=org.gator.gator
 Terminal=false
 Type=Application
 Categories=Network;FileTransfer;Utility;
-StartupWMClass=gator
+StartupWMClass=org.gator.gator

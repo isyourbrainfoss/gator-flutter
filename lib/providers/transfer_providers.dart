@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:gator/core/logger.dart';
 import 'package:gator/models/transfer_state.dart';
 import 'package:gator/providers/croc_provider.dart';
 import 'package:gator/services/croc_transfer_service.dart';
@@ -15,9 +16,12 @@ Future<CrocTransferService?> createTransferService(Ref ref) async {
 }
 
 TransferPhase phaseFromString(String? phase) => switch (phase) {
+      'connecting' => TransferPhase.connecting,
+      'waiting' => TransferPhase.waiting,
       'hashing' => TransferPhase.hashing,
       'sending' => TransferPhase.sending,
       'receiving' => TransferPhase.receiving,
+      'retrying' => TransferPhase.retrying,
       _ => TransferPhase.idle,
     };
 
@@ -29,10 +33,11 @@ Future<Set<String>> snapshotDir(String dir) async {
       await d.create(recursive: true);
     }
     return d
-        .list()
+        .list(followLinks: false)
         .map((e) => e.path.split(Platform.pathSeparator).last)
         .toSet();
-  } catch (_) {
-    return {};
+  } catch (e, st) {
+    GatorLog.e('snapshotDir', 'Could not use save folder $dir', e, st);
+    rethrow;
   }
 }

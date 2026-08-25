@@ -12,9 +12,13 @@ finish-args:
   - --socket=fallback-x11
   - --socket=wayland
   - --device=dri
-  - --filesystem=xdg-download
+  - --filesystem=home
+  - --filesystem=xdg-download:create
   - --filesystem=xdg-documents
   - --filesystem=xdg-pictures
+  - --filesystem=xdg-desktop
+  - --filesystem=xdg-videos
+  - --filesystem=xdg-music
   - --talk-name=org.freedesktop.Notifications
 modules:
   - name: gator

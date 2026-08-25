@@ -29,6 +29,7 @@ void main() {
       expect(validateSettings({'hash': 'foo'})['hash'], defaultHash);
       expect(validateSettings({'hash': ''})['hash'], '');
       expect(validateSettings({'hash': 'imohash'})['hash'], 'imohash');
+      expect(validateSettings({'hash': 'highway'})['hash'], 'highway');
     });
   });
 
@@ -55,6 +56,28 @@ void main() {
   group('getDefaultSaveDirLabel', () {
     test('returns non-empty string', () {
       expect(getDefaultSaveDirLabel(), isNotEmpty);
+    });
+  });
+
+  group('migrateStaleSettings', () {
+    test('clears legacy relays only', () {
+      final migrated = migrateStaleSettings({
+        'relay': legacyRelay,
+        'relay6': legacyRelay6,
+        'hash': 'xxhash',
+      });
+      expect(migrated['relay'], '');
+      expect(migrated['relay6'], '');
+      expect(migrated['hash'], 'xxhash');
+    });
+  });
+
+  group('toDiffMap', () {
+    test('includes show_advanced_settings when true', () {
+      final diff = GatorSettings.fromMap({'show_advanced_settings': true})
+          .toDiffMap();
+      expect(diff['show_advanced_settings'], isTrue);
+      expect(diff.containsKey('yes'), isFalse);
     });
   });
 }

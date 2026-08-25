@@ -10,6 +10,10 @@ import 'package:gator/models/transfer_state.dart';
 import 'package:gator/services/croc_parser.dart';
 
 /// Builds send argv (ported from CrocSendTransfer._build_args).
+///
+/// Custom codes are passed via [sendEnvForCode] (`CROC_SECRET`), never `--code`
+/// — on UNIX/Android croc treats `--code` without the env var as classic-mode
+/// leakage and exits 0 after printing help.
 List<String> buildSendArgs({
   required GatorSettings settings,
   required List<String> files,
@@ -17,8 +21,6 @@ List<String> buildSendArgs({
   required String text,
 }) {
   final args = [crocBinary, ...buildGlobalArgs(settings), 'send'];
-  final custom = settings.defaultCode.trim();
-  if (custom.isNotEmpty) args.addAll(['--code', custom]);
 
   final hashAlg = settings.hash.trim();
   if (hashAlg.isNotEmpty) args.addAll(['--hash', hashAlg]);
@@ -54,8 +56,10 @@ class CrocTransferService {
   Completer<void>? _waitReleased;
   bool _canceled = false;
   bool _finished = false;
+  bool _receiving = false;
   String _readBuf = '';
   final List<String> _lines = [];
+  double? _lastProgress;
 
   final _controller = StreamController<CrocEvent>.broadcast();
   Stream<CrocEvent> get events => _controller.stream;
@@ -75,7 +79,12 @@ class CrocTransferService {
       excluded: excluded,
       text: text,
     ).map((a) => a == crocBinary ? crocPath : a).toList();
-    await _spawn(args, onLine: _handleSendLine);
+    final env = sendEnvForCode(settings.defaultCode);
+    await _spawn(
+      args,
+      env: env.isEmpty ? null : env,
+      onLine: _handleSendLine,
+    );
   }
 
   Future<void> startReceive({
@@ -90,7 +99,7 @@ class CrocTransferService {
       _finish(1);
       return;
     }
-    final args = buildReceiveArgs(settings)
+    final args = buildReceiveArgs(settings, out: saveDir)
         .map((a) => a == crocBinary ? crocPath : a)
         .toList();
     final env = Map<String, String>.from(Platform.environment)
@@ -99,6 +108,7 @@ class CrocTransferService {
       args,
       env: env,
       cwd: saveDir,
+      receiving: true,
       onLine: (line) => _handleReceiveLine(line, saveDir, filesBefore),
     );
   }
@@ -108,7 +118,7 @@ class CrocTransferService {
     if (code != null && code.isNotEmpty) {
       _emit(CrocCodeEvent(code));
     }
-    _handleCommonLine(stripAnsi(line));
+    _handleCommonLine(line);
   }
 
   bool _sawFileIndicator = false;
@@ -119,19 +129,37 @@ class CrocTransferService {
     String saveDir,
     Set<String> filesBefore,
   ) {
-    if (line.contains('Receiving file (')) _sawFileIndicator = true;
-    _handleCommonLine(line);
-    // Post-process happens in _finish for receive.
+    final cleaned = stripAnsi(line);
+    if (cleaned.contains('Receiving file (') ||
+        cleaned.contains('Receiving (<-') ||
+        parseProgressLine(cleaned) != null) {
+      _sawFileIndicator = true;
+    }
+    _handleCommonLine(cleaned);
     _receiveContext = (saveDir: saveDir, filesBefore: filesBefore);
   }
 
   ({String saveDir, Set<String> filesBefore})? _receiveContext;
 
   void _handleCommonLine(String line) {
-    final phase = detectTransferPhase(line);
+    final cleaned = stripAnsi(line);
+    final info = parseProgressLine(cleaned);
+    if (info != null) {
+      if (_lastProgress != info.fraction) {
+        _lastProgress = info.fraction;
+        _emit(info.toEvent());
+      }
+      if (info.hashing) {
+        _emit(const CrocStatusEvent('hashing'));
+      } else if (_receiving) {
+        _emit(const CrocStatusEvent('receiving'));
+      } else {
+        _emit(const CrocStatusEvent('sending'));
+      }
+      return;
+    }
+    final phase = detectTransferPhase(cleaned);
     if (phase != null) _emit(CrocStatusEvent(phase));
-    final fraction = parseProgressFraction(line);
-    if (fraction != null) _emit(CrocProgressEvent(fraction));
   }
 
   static String _shellQuote(String arg) =>
@@ -170,34 +198,44 @@ class CrocTransferService {
     String? cwd,
   }) async {
     if (Platform.isLinux) {
-      // script(1) allocates a PTY so croc flushes "Code is:" immediately.
+      // script(1) allocates a PTY so croc flushes the receive code immediately.
+      // setsid so cancel can kill the whole process group (script → sh → croc).
       final script = await _resolveHostTool('script');
+      final setsid = await _resolveHostTool('setsid');
       final cmd = _buildShellCommand(args, env: env);
       try {
         return await Process.start(
-          script,
-          ['-q', '-c', cmd, '/dev/null'],
+          setsid,
+          [script, '-q', '-c', cmd, '/dev/null'],
           workingDirectory: cwd,
           runInShell: false,
         );
       } on ProcessException {
-        // Fallback: line-buffered pipes if script is unavailable.
-        final stdbuf = await _resolveHostTool('stdbuf');
-        final merged = '$cmd 2>&1';
-        if (await File(stdbuf).exists()) {
+        try {
+          return await Process.start(
+            script,
+            ['-q', '-c', cmd, '/dev/null'],
+            workingDirectory: cwd,
+            runInShell: false,
+          );
+        } on ProcessException {
+          final stdbuf = await _resolveHostTool('stdbuf');
+          final merged = '$cmd 2>&1';
+          if (await File(stdbuf).exists()) {
+            return Process.start(
+              stdbuf,
+              ['-oL', '-eL', 'sh', '-c', merged],
+              workingDirectory: cwd,
+              runInShell: false,
+            );
+          }
           return Process.start(
-            stdbuf,
-            ['-oL', '-eL', 'sh', '-c', merged],
+            await _resolveHostTool('sh'),
+            ['-c', merged],
             workingDirectory: cwd,
             runInShell: false,
           );
         }
-        return Process.start(
-          await _resolveHostTool('sh'),
-          ['-c', merged],
-          workingDirectory: cwd,
-          runInShell: false,
-        );
       }
     }
     if (Platform.isMacOS) {
@@ -244,8 +282,8 @@ class CrocTransferService {
       }
       if (extra != null) merged.addAll(extra);
       return merged;
-    } catch (e) {
-      GatorLog.w('CrocTransferService', 'Failed to get Android croc env: $e');
+    } catch (e, st) {
+      GatorLog.e('CrocTransferService', 'Failed to get Android croc env', e, st);
       return extra ?? const {};
     }
   }
@@ -254,14 +292,24 @@ class CrocTransferService {
     List<String> args, {
     Map<String, String>? env,
     String? cwd,
+    bool receiving = false,
     required void Function(String line) onLine,
   }) async {
+    if (_process != null) {
+      await _tearDownProcess();
+    }
     _reset();
+    _receiving = receiving;
     final display = args.map((a) => a.contains(' ') ? '"$a"' : a).join(' ');
     final mode = Platform.isLinux ? 'script' : 'direct';
     _emit(CrocLogEvent('Running ($mode): $display'));
 
     _process = await _startProcess(args, env: env, cwd: cwd);
+    try {
+      await _process!.stdin.close();
+    } catch (e) {
+      GatorLog.d('CrocTransferService', 'stdin close: $e');
+    }
     _waitReleased = Completer<void>();
 
     final stdoutClosed = Completer<void>();
@@ -270,16 +318,26 @@ class CrocTransferService {
       if (!c.isCompleted) c.complete();
     }
 
-    _stdoutSub = _process!.stdout.transform(utf8.decoder).listen(
+    _stdoutSub = _process!.stdout
+        .transform(const Utf8Decoder(allowMalformed: true))
+        .listen(
           (chunk) => _consumeOutput(chunk, onLine),
           onDone: () => completeOnce(stdoutClosed),
-          onError: (_) => completeOnce(stdoutClosed),
+          onError: (e, st) {
+            GatorLog.e('CrocTransferService', 'stdout error', e, st);
+            _emit(CrocLogEvent('croc output error: $e'));
+            completeOnce(stdoutClosed);
+          },
         );
-    // Desktop wrappers merge croc stderr; still read stderr for script/sh errors.
-    _stderrSub = _process!.stderr.transform(utf8.decoder).listen(
+    _stderrSub = _process!.stderr
+        .transform(const Utf8Decoder(allowMalformed: true))
+        .listen(
           (chunk) => _consumeOutput(chunk, onLine),
           onDone: () => completeOnce(stderrClosed),
-          onError: (_) => completeOnce(stderrClosed),
+          onError: (e, st) {
+            GatorLog.e('CrocTransferService', 'stderr error', e, st);
+            completeOnce(stderrClosed);
+          },
         );
 
     await Future.any([
@@ -301,8 +359,15 @@ class CrocTransferService {
     for (final (segment, fromNewline) in segments) {
       _emitSegment(segment, fromNewline: fromNewline, onLine: onLine);
     }
+    // Probe trailing buffer for a receive code only — do not emit progress
+    // twice from an incomplete \r line.
     final trailing = _readBuf.replaceAll(RegExp(r'[\r\n]+$'), '');
-    if (trailing.isNotEmpty) onLine(trailing);
+    if (trailing.isNotEmpty) {
+      final code = extractCrocCodeFromLine(trailing);
+      if (code != null && code.isNotEmpty) {
+        _emit(CrocCodeEvent(code));
+      }
+    }
   }
 
   void _flushBuffer(void Function(String line) onLine) {
@@ -318,11 +383,14 @@ class CrocTransferService {
     required bool fromNewline,
     required void Function(String line) onLine,
   }) {
-    final stripped = segment.trimRight();
+    final stripped = stripAnsi(segment).trimRight();
     if (stripped.isEmpty) return;
-    final isProgress = parseProgressFraction(stripped) != null;
+    final isProgress = parseProgressLine(stripped) != null;
     if (fromNewline || !isProgress) {
       _lines.add(stripped);
+      if (_lines.length > kMaxLogLines) {
+        _lines.removeRange(0, _lines.length - kMaxLogLines);
+      }
       _emit(CrocLogEvent(stripped));
     }
     onLine(stripped);
@@ -334,12 +402,15 @@ class CrocTransferService {
 
     var receivedFiles = false;
     try {
-      final after = await Directory(ctx.saveDir).list().map((e) => e.path.split(Platform.pathSeparator).last).toSet();
+      final after = await Directory(ctx.saveDir)
+          .list(followLinks: false)
+          .map((e) => e.path.split(Platform.pathSeparator).last)
+          .toSet();
       final newItems = after.difference(ctx.filesBefore);
       final nonText = newItems.where((n) => !n.startsWith('croc-stdin-'));
       if (nonText.isNotEmpty) receivedFiles = true;
-    } catch (e) {
-      GatorLog.d('CrocTransferService', 'Post-process dir snapshot failed: $e');
+    } catch (e, st) {
+      GatorLog.e('CrocTransferService', 'Post-process dir snapshot failed', e, st);
       receivedFiles = _sawFileIndicator;
     }
 
@@ -366,7 +437,7 @@ class CrocTransferService {
   Future<bool> _checkTempTextFile(String saveDir) async {
     try {
       final dir = Directory(saveDir);
-      final entries = await dir.list().toList();
+      final entries = await dir.list(followLinks: false).toList();
       for (final entry in entries) {
         if (entry is File) {
           final name = entry.path.split(Platform.pathSeparator).last;
@@ -380,8 +451,8 @@ class CrocTransferService {
           }
         }
       }
-    } catch (e) {
-      GatorLog.d('CrocTransferService', 'Temp text file check failed: $e');
+    } catch (e, st) {
+      GatorLog.e('CrocTransferService', 'Temp text file check failed', e, st);
     }
     return false;
   }
@@ -409,12 +480,18 @@ class CrocTransferService {
       } catch (e) {
         GatorLog.w('CrocTransferService', 'pkill failed during teardown: $e');
       }
+      try {
+        Process.killPid(-proc.pid, ProcessSignal.sigkill);
+      } catch (e) {
+        GatorLog.d('CrocTransferService', 'process-group kill: $e');
+      }
     }
     proc.kill(ProcessSignal.sigkill);
     await _stdoutSub?.cancel();
     await _stderrSub?.cancel();
     _stdoutSub = null;
     _stderrSub = null;
+    _process = null;
   }
 
   void _reset() {
@@ -428,6 +505,8 @@ class CrocTransferService {
     _waitReleased = null;
     _stdoutSub = null;
     _stderrSub = null;
+    _lastProgress = null;
+    _receiving = false;
   }
 
   void _emit(CrocEvent event) {

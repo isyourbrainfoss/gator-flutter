@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:gator/core/logger.dart';
 import 'package:open_filex/open_filex.dart';
 
 /// Opens a directory in the platform file manager.
@@ -17,8 +18,8 @@ abstract final class FolderOpener {
           {'path': path},
         );
         if (ok == true) return true;
-      } on PlatformException {
-        // Fall through to OpenFilex.
+      } on PlatformException catch (e, st) {
+        GatorLog.e('FolderOpener', 'openDirectory channel failed', e, st);
       }
     }
 

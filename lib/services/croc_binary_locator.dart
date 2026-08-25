@@ -7,30 +7,30 @@ import 'package:gator/core/logger.dart';
 
 /// Locates the bundled croc binary for the current platform.
 class CrocBinaryLocator {
-  CrocBinaryLocator({this._cachedPath});
+  CrocBinaryLocator({this.cachedPath});
 
-  String? _cachedPath;
+  String? cachedPath;
 
   static const _crocChannel = MethodChannel('org.gator.gator/croc');
 
   /// Returns the path to an executable croc binary, or null if unavailable.
   Future<String?> locate() async {
-    if (_cachedPath != null) return _cachedPath;
+    if (cachedPath != null) return cachedPath;
 
     if (kIsWeb) return null;
 
     if (!Platform.isAndroid) {
       final resolved = await _resolveDesktopCroc();
-      return _cachedPath = resolved;
+      return cachedPath = resolved;
     }
 
     try {
       final path = await _crocChannel.invokeMethod<String>('getCrocPath');
       if (path != null && path.isNotEmpty) {
-        return _cachedPath = path;
+        return cachedPath = path;
       }
-    } catch (e) {
-      GatorLog.w('CrocBinaryLocator', 'Failed to get croc path via channel: $e');
+    } catch (e, st) {
+      GatorLog.e('CrocBinaryLocator', 'Failed to get croc path via channel', e, st);
     }
     return null;
   }
@@ -40,8 +40,8 @@ class CrocBinaryLocator {
     if (Platform.isAndroid) {
       try {
         return await _crocChannel.invokeMethod<String>('verifyCroc');
-      } catch (e) {
-        GatorLog.w('CrocBinaryLocator', 'Android verifyCroc failed: $e');
+      } catch (e, st) {
+        GatorLog.e('CrocBinaryLocator', 'Android verifyCroc failed', e, st);
         return null;
       }
     }
@@ -56,14 +56,25 @@ class CrocBinaryLocator {
       }
       final err = (result.stderr as String).trim();
       if (err.isNotEmpty) return err;
-    } catch (e) {
-      GatorLog.w('CrocBinaryLocator', 'Process --version failed for $path: $e');
+    } catch (e, st) {
+      GatorLog.e('CrocBinaryLocator', 'Process --version failed for $path', e, st);
       return null;
     }
     return null;
   }
 
-  Future<String> _resolveDesktopCroc() async {
+  Future<String?> _resolveDesktopCroc() async {
+    try {
+      final nextToApp = File(
+        '${File(Platform.resolvedExecutable).parent.path}/croc',
+      );
+      if (await nextToApp.exists()) return nextToApp.path;
+    } catch (e) {
+      GatorLog.d('CrocBinaryLocator', 'resolvedExecutable croc: $e');
+    }
+    const bundled = '/app/bin/croc';
+    if (await File(bundled).exists()) return bundled;
+
     for (final dir in (Platform.environment['PATH'] ?? '').split(':')) {
       if (dir.isEmpty) continue;
       final candidate = File('$dir/croc');
@@ -76,11 +87,11 @@ class CrocBinaryLocator {
       final which = await Process.run('which', ['croc']);
       if (which.exitCode == 0) {
         final path = (which.stdout as String).trim();
-        if (path.isNotEmpty) return path;
+        if (path.isNotEmpty && await File(path).exists()) return path;
       }
     } catch (e) {
       GatorLog.d('CrocBinaryLocator', 'which croc failed: $e');
     }
-    return 'croc';
+    return null;
   }
 }

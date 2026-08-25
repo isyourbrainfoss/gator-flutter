@@ -2,7 +2,7 @@
 # Cross-compile croc for Android and copy into Flutter assets.
 set -euo pipefail
 
-CROC_VERSION="11.0.1"
+CROC_VERSION="11.3.2"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ASSETS_DIR="$ROOT_DIR/assets/croc"

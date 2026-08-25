@@ -18,7 +18,8 @@ class RelayProxySection extends ConsumerWidget {
         const PreferenceSectionHeader('Relay and Proxy'),
         PreferenceTextField(
           title: 'Relay address',
-          subtitle: 'Leave empty to use the croc default relay',
+          subtitle:
+              'Empty = croc public pool (the code chooses the relay). --relay',
           value: settings.relay,
           onSubmitted: (v) =>
               ref.read(settingsProvider.notifier).updateSetting('relay', v),
@@ -32,7 +33,7 @@ class RelayProxySection extends ConsumerWidget {
         ),
         PreferenceTextField(
           title: 'Relay password',
-          subtitle: 'Default: pass123',
+          subtitle: 'Leave empty for croc’s default relay password (--pass)',
           value: settings.pass,
           obscure: true,
           onSubmitted: (v) =>
@@ -45,7 +46,7 @@ class RelayProxySection extends ConsumerWidget {
               ref.read(settingsProvider.notifier).updateSetting('socks5', v),
         ),
         PreferenceTextField(
-          title: 'HTTP proxy',
+          title: 'HTTP proxy (--connect)',
           value: settings.connect,
           onSubmitted: (v) =>
               ref.read(settingsProvider.notifier).updateSetting('connect', v),

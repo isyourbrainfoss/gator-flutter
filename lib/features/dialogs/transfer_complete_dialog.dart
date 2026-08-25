@@ -4,6 +4,10 @@ Future<bool> showTransferCompleteDialog(BuildContext context) {
   return showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
+          icon: Icon(
+            Icons.check_circle,
+            color: Theme.of(context).colorScheme.primary,
+          ),
           title: const Text('Transfer Complete'),
           content: const Text('Files received successfully.'),
           actions: [

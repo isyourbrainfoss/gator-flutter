@@ -32,7 +32,7 @@ Future<Set<String>> snapshotDir(String dir) async {
     if (!await d.exists()) {
       await d.create(recursive: true);
     }
-    return d
+    return await d
         .list(followLinks: false)
         .map((e) => e.path.split(Platform.pathSeparator).last)
         .toSet();

@@ -44,6 +44,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Copied from assets/croc by tool/build_croc_android.sh
+/android/app/src/main/jniLibs/
+
 # croc temp stdin files from desktop dev runs
 /croc-stdin-*
 

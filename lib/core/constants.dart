@@ -4,7 +4,7 @@ library;
 const String appId = 'org.gator.Gator';
 const String appName = 'Gator';
 // appVersion removed: prefer runtime value from appVersionProvider (package_info_plus).
-const String crocVersion = '11.3.2';
+const String crocVersion = '11.5.3';
 const String crocBinary = 'croc';
 const String codeIsPrefix = 'Code is: ';
 

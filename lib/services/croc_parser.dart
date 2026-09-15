@@ -13,15 +13,19 @@ final _acceptPromptRe = RegExp(
 );
 final _legacyFileNameRe = RegExp(r'(?:Receiving|Sending) file \(([^)]+)\)');
 final _sendingQuotedRe = RegExp(r"^Sending '([^']+)'");
+// v11.5 normalized progressbar: optional action, padded %, `|…|` bar.
 final _progressLineRe = RegExp(
-  r'^(?:Hashing\s+)?(.+?)\s+(\d{1,3})%\s*\|',
+  r'^(?:(?:Hashing|Uploading|Downloading)\s+)?(.+?)\s+(\d{1,3})%\s*\|',
   caseSensitive: false,
 );
+// schollz/progressbar v3.19 SI units use a leading space and lowercase kB.
 final _speedRe = RegExp(
-  r'\((?:([\d.]+)/([\d.]+)\s+([KMGT]?i?B),\s*)?([\d.]+\s*[KMGT]?i?B/s)\)',
+  r'\(\s*(?:([\d.]+)\s*([kKMGT]?i?B)?/([\d.]+)\s*([kKMGT]?i?B),\s*)?([\d.]+\s*[kKMGT]?i?B/s)\)',
+  caseSensitive: false,
 );
 final _etaRe = RegExp(r'\[([^:\]]+):([^\]]+)\]');
 final _fileCountRe = RegExp(r'\s(\d+)/(\d+)\s*$');
+final _nFilesRe = RegExp(r'^(\d+)\s+files$', caseSensitive: false);
 
 /// Parsed croc progressbar line (v10/v11 progressbar v3).
 class CrocProgressInfo {
@@ -68,11 +72,14 @@ String stripAnsi(String line) => line.replaceAll(_ansiRe, '');
 /// Supports:
 /// - legacy `Code is: word-word-word` (croc ≤ 11.0.x)
 /// - v11.2.4+ `croc [--flags] secret` under "On the other computer, run:"
+/// - the same command with a trailing `(code copied to clipboard)` notice
 String? extractCrocCodeFromLine(String line) {
   final cleaned = stripAnsi(line).trim();
   if (cleaned.isEmpty) return null;
   final low = cleaned.toLowerCase();
-  if (low.contains('getcroc.com') || low.contains('http://') || low.contains('https://')) {
+  if (low.contains('getcroc.com') ||
+      low.contains('http://') ||
+      low.contains('https://')) {
     return null;
   }
 
@@ -82,7 +89,14 @@ String? extractCrocCodeFromLine(String line) {
     return normalizeCrocCode(cleaned);
   }
 
-  final cmd = _crocCmdRe.firstMatch(cleaned);
+  var cmdLine = cleaned;
+  final runIdx = low.indexOf('run:');
+  if (runIdx != -1) {
+    cmdLine = cleaned.substring(runIdx + 4).trim();
+    if (cmdLine.isEmpty) return null;
+  }
+
+  final cmd = _crocCmdRe.firstMatch(cmdLine);
   if (cmd != null) {
     final rest = (cmd.group(1) ?? '').trim();
     if (rest.isEmpty) return null;
@@ -109,10 +123,8 @@ String? extractCrocCodeFromLine(String line) {
 const _crocStatusPrefixes = [
   'connecting',
   'securing channel',
-  'receiving (<-',
-  'receiving (->',
-  'sending (<-',
-  'sending (->',
+  'receiving (',
+  'sending (',
   'running:',
   'waiting',
   'receiving file (',
@@ -125,6 +137,9 @@ const _crocStatusPrefixes = [
   'retrying',
   'already up to date',
   'no files transferred',
+  'uploading',
+  'downloading',
+  'hashing',
 ];
 
 const _crocStatusSubstrings = [
@@ -144,6 +159,10 @@ const _crocStatusSubstrings = [
   'waiting for sender',
   'waiting for file list',
   'waiting for receiver',
+  'tailcat is unavailable',
+  'transfer interruption',
+  'code copied to clipboard',
+  'command copied to clipboard',
 ];
 
 /// True if [line] is croc CLI status output, not received text payload.
@@ -175,6 +194,13 @@ String normalizeCrocCode(String code) {
 /// Return 0.0–1.0 if [line] looks like a croc progress update.
 double? parseProgressFraction(String line) => parseProgressLine(line)?.fraction;
 
+String? _joinByteCount(String? amount, String? unit) {
+  if (amount == null) return null;
+  final u = (unit ?? '').trim();
+  if (u.isEmpty) return amount;
+  return '$amount $u';
+}
+
 /// Parse a real croc progressbar line, or null.
 CrocProgressInfo? parseProgressLine(String line) {
   final cleaned = stripAnsi(line).trimRight();
@@ -184,22 +210,21 @@ CrocProgressInfo? parseProgressLine(String line) {
   if (value == null || value < 0 || value > 100) return null;
 
   var name = match.group(1)!.trim();
-  final hashing = cleaned.toLowerCase().startsWith('hashing');
-  if (hashing && name.toLowerCase().startsWith('hashing')) {
-    name = name.substring('hashing'.length).trim();
-  }
+  final low = cleaned.toLowerCase();
+  final hashing = low.startsWith('hashing');
   name = name.replaceAll(RegExp(r'\.+$'), '').trim();
-  if (name.isEmpty) name = '';
 
   String? speed;
   String? transferred;
   String? total;
   final speedMatch = _speedRe.firstMatch(cleaned);
   if (speedMatch != null) {
-    speed = speedMatch.group(4);
+    speed = speedMatch.group(5)?.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (speedMatch.group(1) != null && speedMatch.group(3) != null) {
-      transferred = '${speedMatch.group(1)} ${speedMatch.group(3)}';
-      total = '${speedMatch.group(2)} ${speedMatch.group(3)}';
+      final totalUnit = speedMatch.group(4);
+      final fromUnit = speedMatch.group(2) ?? totalUnit;
+      transferred = _joinByteCount(speedMatch.group(1), fromUnit);
+      total = _joinByteCount(speedMatch.group(3), totalUnit);
     }
   }
 
@@ -216,6 +241,10 @@ CrocProgressInfo? parseProgressLine(String line) {
   if (countMatch != null) {
     fileIndex = int.tryParse(countMatch.group(1)!);
     fileCount = int.tryParse(countMatch.group(2)!);
+  }
+  final nFiles = _nFilesRe.firstMatch(name);
+  if (nFiles != null) {
+    fileCount ??= int.tryParse(nFiles.group(1)!);
   }
 
   return CrocProgressInfo(
@@ -251,10 +280,17 @@ String? detectTransferPhase(String line) {
       low.startsWith('on the other computer')) {
     return 'waiting';
   }
-  if (low.contains('receiving (<-') || low.startsWith('receiving ')) {
+  // v11.5: "Receiving (<-ip)", "Receiving (local<-peer)", "Downloading …"
+  if (low.contains('receiving (') ||
+      low.startsWith('receiving ') ||
+      low.startsWith('downloading')) {
     return 'receiving';
   }
-  if (low.contains('sending (->') || low.startsWith("sending '")) {
+  // v11.5: "Sending (->ip)", "Sending (local->peer)"; keep quoted collection.
+  if (low.startsWith('sending (') ||
+      low.contains('sending (->') ||
+      low.startsWith("sending '") ||
+      low.startsWith('uploading')) {
     return 'sending';
   }
   return null;
@@ -279,7 +315,13 @@ String? explainCrocFailure(String line) {
   if (low.contains('code is invalid')) {
     return 'That transfer code is invalid or expired. Ask the sender for a new code.';
   }
-  if (low.contains('unsupported pake') || low.contains('incompatible pake')) {
+  if (low.contains('could not secure channel') ||
+      low.contains('pake not successful')) {
+    return 'Could not establish a secure channel. Check the code and try again.';
+  }
+  if (low.contains('unsupported pake') ||
+      low.contains('incompatible pake') ||
+      low.contains('unsupported pake protocol version')) {
     return 'The other device is using an older croc (need v11). Update both sides.';
   }
   if (low.contains('peer disconnected') || low.contains('peer error')) {

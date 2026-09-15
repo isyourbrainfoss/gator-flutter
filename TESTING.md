@@ -4,7 +4,8 @@ Run these on a physical Android device (arm64) or emulator after `flutter run`.
 
 ## Setup
 
-- Desktop peer with croc v11+ or GTK Gator installed (v11 uses PAKE protocol v2)- Both devices on same network (or use default relay)
+- Desktop peer with croc v11.5+ or GTK Gator installed (v11 uses PAKE protocol v2)
+- Both devices on same network (or use default relay)
 
 ## Matrix
 

@@ -2,7 +2,9 @@
 # Cross-compile croc for Android and copy into Flutter assets.
 set -euo pipefail
 
-CROC_VERSION="11.3.2"
+# Pinned croc release. CI (flutter_ci.yml, android_release.yml) runs this
+# script; 11.5.3 needs Go 1.27+.
+CROC_VERSION="11.5.3"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ASSETS_DIR="$ROOT_DIR/assets/croc"

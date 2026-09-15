@@ -24,6 +24,11 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.5.15" date="2026-09-15">
+      <description>
+        <p>croc 11.5.3 with v11.5 progressbar/UX parsing.</p>
+      </description>
+    </release>
     <release version="1.5.14" date="2026-08-25">
       <description>
         <p>croc 11.3.2, transfer UX, desktop layout, and stability fixes.</p>

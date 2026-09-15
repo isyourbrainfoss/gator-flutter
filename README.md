@@ -76,7 +76,7 @@ If Pages works but you prefer GitHub as the source:
 https://github.com/isyourbrainfoss/gator-flutter
 ```
 
-APK filter (arm64-only, ~39 MB):
+APK filter (arm64-only, ~47 MB):
 
 ```
 gator-.*-arm64-v8a\.apk
@@ -98,7 +98,7 @@ flutter run   # Android device/emulator, or -d linux for desktop dev
 ### Build assets
 
 ```bash
-./tool/build_croc_android.sh   # croc binary (requires Go)
+./tool/build_croc_android.sh   # croc 11.5.3 (requires Go 1.27+)
 ./tool/generate_icons.sh       # launcher icons from GTK SVG
 ```
 

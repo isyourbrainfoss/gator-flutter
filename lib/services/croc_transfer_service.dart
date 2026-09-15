@@ -131,7 +131,7 @@ class CrocTransferService {
   ) {
     final cleaned = stripAnsi(line);
     if (cleaned.contains('Receiving file (') ||
-        cleaned.contains('Receiving (<-') ||
+        cleaned.contains('Receiving (') ||
         parseProgressLine(cleaned) != null) {
       _sawFileIndicator = true;
     }

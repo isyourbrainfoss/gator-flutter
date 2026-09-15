@@ -4,6 +4,10 @@ import 'package:gator/models/gator_settings.dart';
 import 'package:gator/services/croc_parser.dart';
 
 void main() {
+  test('pins bundled croc 11.5.3', () {
+    expect(crocVersion, '11.5.3');
+  });
+
   group('parseProgressFraction', () {
     test('parses progress lines', () {
       expect(parseProgressFraction('Sending  45%'), isNull);
@@ -117,6 +121,28 @@ void main() {
         isNull,
       );
     });
+
+    test('extracts code from v11.5 one-line run: instructions', () {
+      expect(
+        extractCrocCodeFromLine(
+          'On the other computer, run: croc 5015-lucas-valid-balance',
+        ),
+        '5015-lucas-valid-balance',
+      );
+      expect(
+        extractCrocCodeFromLine(
+          '  croc film-alibi-jet (code copied to clipboard)',
+        ),
+        'film-alibi-jet',
+      );
+      expect(
+        extractCrocCodeFromLine(
+          '  croc --relay relay.example:9009 acid-pink-fostered-succeeding (command copied to clipboard)',
+        ),
+        'acid-pink-fostered-succeeding',
+      );
+      expect(extractCrocCodeFromLine('On the other computer, run:'), isNull);
+    });
   });
 
   group('normalizeCrocCode', () {
@@ -140,6 +166,29 @@ void main() {
       expect(detectTransferPhase('Code is: abc'), 'waiting');
       expect(detectTransferPhase('Looking for sender...'), 'connecting');
       expect(detectTransferPhase('Retrying securely...'), 'retrying');
+    });
+
+    test('detects croc 11.5 direction labels and store verbs', () {
+      expect(
+        detectTransferPhase('Sending (198.51.100.10->203.0.113.20)'),
+        'sending',
+      );
+      expect(
+        detectTransferPhase('Receiving (198.51.100.10<-203.0.113.20)'),
+        'receiving',
+      );
+      expect(detectTransferPhase('Sending (->203.0.113.20)'), 'sending');
+      expect(detectTransferPhase('Receiving (<-203.0.113.20)'), 'receiving');
+      expect(detectTransferPhase('Uploading LICENSE  50% |█|'), 'sending');
+      expect(detectTransferPhase('Downloading 2 files  50% |█|'), 'receiving');
+      expect(
+        detectTransferPhase('Sending 3 files (1.2 MB)'),
+        isNull,
+      );
+      expect(
+        detectTransferPhase('On the other computer, run:'),
+        'waiting',
+      );
     });
   });
 
@@ -225,6 +274,14 @@ void main() {
         ),
         'download.zip',
       );
+      expect(
+        extractFileName('Uploading LICENSE  50% |██████████          |'),
+        'LICENSE',
+      );
+      expect(
+        extractFileName("Sending 'photo.jpg' (1.2 MB)"),
+        'photo.jpg',
+      );
     });
   });
 
@@ -240,6 +297,62 @@ void main() {
       expect(info.eta, '1h45m0s');
       expect(info.fileIndex, 2);
       expect(info.fileCount, 5);
+      expect(info.transferred, '100 GB');
+      expect(info.total, '153 GB');
+    });
+
+    test('parses croc 11.5 normalized progressbar metadata', () {
+      final info = parseProgressLine(
+        'download.zip   20% |████                | (1.7/8.3 GB, 117 MB/s) [2s:8s]',
+      );
+      expect(info, isNotNull);
+      expect(info!.fraction, closeTo(0.20, 0.001));
+      expect(info.fileName, 'download.zip');
+      expect(info.speed, '117 MB/s');
+      expect(info.eta, '8s');
+      expect(info.hashing, isFalse);
+    });
+
+    test('parses kB units and mixed byte suffixes', () {
+      final slow = parseProgressLine(
+        'note.txt  40% |████████            | (400/1000 kB, 12.5 kB/s) [2s:48s]',
+      );
+      expect(slow, isNotNull);
+      expect(slow!.speed, '12.5 kB/s');
+      expect(slow.transferred, '400 kB');
+      expect(slow.total, '1000 kB');
+
+      final mixed = parseProgressLine(
+        'movie.mkv  5% |█                   | (100 kB/153 MB, 8.5 kB/s) [1s:5h]',
+      );
+      expect(mixed, isNotNull);
+      expect(mixed!.transferred, '100 kB');
+      expect(mixed.total, '153 MB');
+      expect(mixed.speed, '8.5 kB/s');
+    });
+
+    test('parses hashing, uploading, and downloading descriptions', () {
+      final hashing = parseProgressLine('Hashing download.zip  99% |█|');
+      expect(hashing, isNotNull);
+      expect(hashing!.fileName, 'download.zip');
+      expect(hashing.hashing, isTrue);
+      expect(hashing.fraction, closeTo(0.99, 0.001));
+
+      final uploading = parseProgressLine(
+        'Uploading LICENSE  50% |██████████          | (50/100 kB, 1.2 kB/s)',
+      );
+      expect(uploading, isNotNull);
+      expect(uploading!.fileName, 'LICENSE');
+      expect(uploading.hashing, isFalse);
+      expect(uploading.fraction, closeTo(0.50, 0.001));
+
+      final downloading = parseProgressLine(
+        'Downloading 2 files  100% |████████████████████| (153/153 GB, 8.5 MB/s)',
+      );
+      expect(downloading, isNotNull);
+      expect(downloading!.fileName, '2 files');
+      expect(downloading.fileCount, 2);
+      expect(downloading.eta, isNull);
     });
   });
 
@@ -249,6 +362,31 @@ void main() {
       expect(isCrocStatusLine('Authenticating code...'), isTrue);
       expect(isCrocStatusLine('On the other computer, run:'), isTrue);
       expect(isCrocStatusLine('hello from sender'), isFalse);
+    });
+
+    test('filters croc 11.5 status lines', () {
+      expect(
+        isCrocStatusLine('Sending (198.51.100.10->203.0.113.20)'),
+        isTrue,
+      );
+      expect(
+        isCrocStatusLine('Receiving (198.51.100.10<-203.0.113.20)'),
+        isTrue,
+      );
+      expect(isCrocStatusLine('opening transfer channels...'), isTrue);
+      expect(isCrocStatusLine('waiting for file list...'), isTrue);
+      expect(
+        isCrocStatusLine(
+          'Tailcat is unavailable in this build; using the croc relay instead.',
+        ),
+        isTrue,
+      );
+      expect(
+        isCrocStatusLine(
+          'Sender detected a transfer interruption. Retrying securely...',
+        ),
+        isTrue,
+      );
     });
   });
 
@@ -261,6 +399,10 @@ void main() {
       expect(
         explainCrocFailure('unsupported PAKE version'),
         contains('older croc'),
+      );
+      expect(
+        explainCrocFailure('could not secure channel'),
+        contains('secure channel'),
       );
       expect(explainCrocFailure('hello'), isNull);
     });

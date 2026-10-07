@@ -1,0 +1,56 @@
+name: Release ship helper
+
+on:
+  workflow_dispatch:
+    inputs:
+      flutter_tag:
+        description: Tag for gator-flutter (empty to skip)
+        required: false
+        default: v1.5.16
+        type: string
+      flutter_tag_message:
+        required: false
+        default: v1.5.16 — croc 11.5.4
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pin test expectation to 11.5.4
+        run: |
+          set -euo pipefail
+          sed -i 's/11\.5\.3/11.5.4/g' test/croc_parser_test.dart README.md TASKS.md || true
+          if ! grep -q "11.5.4" test/croc_parser_test.dart; then
+            echo "pin missing" >&2; exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add test/croc_parser_test.dart README.md TASKS.md || true
+          if ! git diff --cached --quiet; then
+            git commit -m "test/docs: pin remaining 11.5.4 expectations"
+            git push origin HEAD:main
+          else
+            echo "no further pin changes"
+          fi
+
+      - name: Create release tag
+        if: inputs.flutter_tag != ''
+        env:
+          TAG: ${{ inputs.flutter_tag }}
+          MSG: ${{ inputs.flutter_tag_message }}
+        run: |
+          set -euo pipefail
+          git fetch --tags origin
+          git pull --ff-only origin main
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Tag exists: $TAG"
+            exit 0
+          fi
+          git tag -a "$TAG" -m "$MSG"
+          git push origin "refs/tags/$TAG"

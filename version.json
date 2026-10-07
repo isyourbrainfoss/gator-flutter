@@ -1,8 +1,8 @@
 {
-  "version": "1.5.15",
-  "versionName": "1.5.15",
-  "versionCode": 16,
-  "sha256sum": "9c0d7c8b767285e2317924c7fcbf431d92ee6ff090750444cb1b13d9263b8ec4",
+  "version": "1.5.16",
+  "versionName": "1.5.16",
+  "versionCode": 17,
+  "sha256sum": "3e5e751cd50682c6109fae868253d905cf0f0963ca4f9237acc6a3c1338e19af",
   "url": "https://raw.githubusercontent.com/isyourbrainfoss/gator-flutter/gh-pages/gator-arm64-v8a.apk",
-  "uploadTimestamp": 1789589100000
+  "uploadTimestamp": 1791371683000
 }

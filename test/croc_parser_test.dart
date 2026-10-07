@@ -4,8 +4,8 @@ import 'package:gator/models/gator_settings.dart';
 import 'package:gator/services/croc_parser.dart';
 
 void main() {
-  test('pins bundled croc 11.5.3', () {
-    expect(crocVersion, '11.5.3');
+  test('pins bundled croc 11.5.4', () {
+    expect(crocVersion, '11.5.4');
   });
 
   group('parseProgressFraction', () {

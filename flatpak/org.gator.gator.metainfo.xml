@@ -24,6 +24,11 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.5.16" date="2026-10-07">
+      <description>
+        <p>croc 11.5.4 (bugfix/deps; no CLI breaking changes).</p>
+      </description>
+    </release>
     <release version="1.5.15" date="2026-09-15">
       <description>
         <p>croc 11.5.3 with v11.5 progressbar/UX parsing.</p>

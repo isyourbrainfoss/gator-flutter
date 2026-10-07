@@ -88,6 +88,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
           files: |
             gator-*-arm64-v8a.apk
             gator-arm64-v8a.apk

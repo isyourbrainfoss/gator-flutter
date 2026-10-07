@@ -3,8 +3,8 @@
 set -euo pipefail
 
 # Pinned croc release. CI (flutter_ci.yml, android_release.yml) runs this
-# script; 11.5.3 needs Go 1.27+.
-CROC_VERSION="11.5.3"
+# script; 11.5.4 needs Go 1.27+.
+CROC_VERSION="11.5.4"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ASSETS_DIR="$ROOT_DIR/assets/croc"

@@ -43,7 +43,7 @@ jobs:
           REPO_DIR: ${{ github.workspace }}/flatpak-pages-repo
         run: |
           mkdir -p "$REPO_DIR"
-          ./flatpak/build-flatpak.sh x86_64
+          bash flatpak/build-flatpak.sh x86_64
 
       - name: Upload x86_64 repo
         uses: actions/upload-artifact@v4
@@ -97,7 +97,7 @@ jobs:
       - name: Build Flatpak (aarch64)
         env:
           REPO_DIR: ${{ github.workspace }}/flatpak-pages-repo
-        run: ./flatpak/build-flatpak.sh aarch64
+        run: bash flatpak/build-flatpak.sh aarch64
 
       - name: Upload combined repo
         uses: actions/upload-artifact@v4

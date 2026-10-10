@@ -3,7 +3,6 @@
 > **Note**
 > This is very experimental. Assume nothing here is written, or necessarily read through or fully understood, by a human unless stated, and that includes this text. Use it at your own risk, but you're encouraged to reuse any parts you find useful. The human work here is mainly ideas, testing in reality, and persistence with a vision.
 
-
 Material 3 frontend for [croc](https://github.com/schollz/croc) encrypted P2P file transfer — Android APK and Linux Flatpak.
 Companion to the GTK app [Gator](https://github.com/isyourbrainfoss/gator).
 

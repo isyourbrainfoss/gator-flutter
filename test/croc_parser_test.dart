@@ -414,4 +414,75 @@ void main() {
       expect(sendEnvForCode(''), isEmpty);
     });
   });
+
+  group('croc update notice', () {
+    test('is never taken as a transfer code', () {
+      expect(
+        extractCrocCodeFromLine(
+          'A newer croc version is available: v11.5.5 (current: v11.5.4).',
+        ),
+        isNull,
+      );
+      expect(extractCrocCodeFromLine('Run: croc update'), isNull);
+      expect(
+        extractCrocCodeFromLine('\x1B[1mRun: croc upgrade\x1B[0m'),
+        isNull,
+      );
+    });
+
+    test('real codes still parse', () {
+      expect(
+        extractCrocCodeFromLine('croc 1234-lion-stop-sofia'),
+        '1234-lion-stop-sofia',
+      );
+      expect(
+        extractCrocCodeFromLine(
+          'On the other computer, run: croc --relay x:9009 7777-a-b-c',
+        ),
+        '7777-a-b-c',
+      );
+    });
+
+    test('isCrocUpdateNotice', () {
+      expect(
+        isCrocUpdateNotice('A newer croc version is available: v11.5.5'),
+        isTrue,
+      );
+      expect(isCrocUpdateNotice('Run: croc update'), isTrue);
+      expect(isCrocUpdateNotice('croc 1234-lion-stop-sofia'), isFalse);
+    });
+
+    test('is not reported as a failure', () {
+      expect(
+        explainFromLogs([
+          'A newer croc version is available: v11.5.5 (current: v11.5.4).',
+          'Run: croc update',
+        ]),
+        isNull,
+      );
+    });
+  });
+
+  test('"no public relay available" maps to the relay hint', () {
+    expect(
+      explainCrocFailure('no public relay available'),
+      contains('croc relay'),
+    );
+  });
+
+  test('update notice lines are status, not received text', () {
+    expect(
+      isCrocStatusLine(
+        'A newer croc version is available: v11.5.5 (current: v11.5.4).',
+      ),
+      isTrue,
+    );
+    expect(isCrocStatusLine('Run: croc update'), isTrue);
+    expect(isCrocStatusLine('Hello from gator'), isFalse);
+  });
+
+  test('croc 11.5 text receive banner is a status line', () {
+    expect(isCrocStatusLine('Receiving text message (15 B)'), isTrue);
+    expect(isCrocStatusLine('Receiving (172.30.0.2<-127.0.0.1)'), isTrue);
+  });
 }

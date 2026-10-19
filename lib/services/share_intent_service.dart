@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Payload from Android share intent (ACTION_SEND / ACTION_SEND_MULTIPLE).
@@ -24,19 +25,28 @@ class SharePayload {
 
 /// Receives files/text shared to Gator from other Android apps.
 class ShareIntentService {
-  ShareIntentService();
+  ShareIntentService({bool? supported})
+      : _supported = supported ??
+            (!kIsWeb && defaultTargetPlatform == TargetPlatform.android);
+
+  /// Only the Android embedding registers the share channels; on desktop the
+  /// calls would throw MissingPluginException on every launch.
+  final bool _supported;
 
   static const _method = MethodChannel('org.gator.gator/share');
   static const _events = EventChannel('org.gator.gator/share/events');
 
-  Stream<SharePayload> get stream =>
-      _events.receiveBroadcastStream().map(
-            (event) => SharePayload.fromMap(
-              event is Map ? Map<dynamic, dynamic>.from(event) : null,
-            ),
-          );
+  Stream<SharePayload> get stream {
+    if (!_supported) return const Stream<SharePayload>.empty();
+    return _events.receiveBroadcastStream().map(
+          (event) => SharePayload.fromMap(
+            event is Map ? Map<dynamic, dynamic>.from(event) : null,
+          ),
+        );
+  }
 
   Future<SharePayload?> consumePending() async {
+    if (!_supported) return null;
     final result = await _method.invokeMethod<Map<dynamic, dynamic>?>(
       'getPendingShare',
     );

@@ -77,6 +77,7 @@ String? extractCrocCodeFromLine(String line) {
   final cleaned = stripAnsi(line).trim();
   if (cleaned.isEmpty) return null;
   final low = cleaned.toLowerCase();
+  if (isCrocUpdateNotice(cleaned)) return null;
   if (low.contains('getcroc.com') ||
       low.contains('http://') ||
       low.contains('https://')) {
@@ -115,9 +116,35 @@ String? extractCrocCodeFromLine(String line) {
       }
       code = token;
     }
-    if (code != null && code.isNotEmpty) return normalizeCrocCode(code);
+    if (code != null &&
+        code.isNotEmpty &&
+        !_crocSubcommands.contains(code.toLowerCase())) {
+      return normalizeCrocCode(code);
+    }
   }
   return null;
+}
+
+/// croc subcommands that can follow `croc` in a hint like "Run: croc update";
+/// they are never a transfer code.
+const _crocSubcommands = {
+  'update',
+  'upgrade',
+  'send',
+  'relay',
+  'help',
+  'h',
+  'version',
+};
+
+/// croc ≥ 11.5 prints "A newer croc version is available: vX (current: vY)."
+/// followed by "Run: croc update". Gator bundles its own croc, so this is
+/// noise and must not be mistaken for a transfer code or an error.
+bool isCrocUpdateNotice(String line) {
+  final low = stripAnsi(line).trim().toLowerCase();
+  return low.startsWith('a newer croc version is available') ||
+      low == 'run: croc update' ||
+      low == 'run: croc upgrade';
 }
 
 const _crocStatusPrefixes = [
@@ -144,6 +171,7 @@ const _crocStatusPrefixes = [
 
 const _crocStatusSubstrings = [
   'transfer finished',
+  'receiving text message',
   'code is invalid',
   'on unix systems',
   'croc_secret',
@@ -170,6 +198,7 @@ bool isCrocStatusLine(String line) {
   final s = stripAnsi(line).trim();
   if (s.isEmpty) return true;
   if (s.contains('|') && s.contains('%')) return true;
+  if (isCrocUpdateNotice(s)) return true;
   final low = s.toLowerCase();
   for (final prefix in _crocStatusPrefixes) {
     if (low.startsWith(prefix)) return true;
@@ -335,6 +364,7 @@ String? explainCrocFailure(String line) {
       low.contains('connection refused') ||
       low.contains('no such host') ||
       low.contains('lookup ') ||
+      low.contains('no public relay available') ||
       (low.contains('relay') && (low.contains('error') || low.contains('fail')))) {
     return 'Could not reach the croc relay. Check the network, or set a custom relay in Preferences.';
   }

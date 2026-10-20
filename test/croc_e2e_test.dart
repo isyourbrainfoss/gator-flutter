@@ -146,4 +146,67 @@ void main() {
     expect(events.whereType<CrocTextReceivedEvent>(), isEmpty);
     expect(events.whereType<CrocTransferCompleteEvent>(), isEmpty);
   }, skip: skip);
+
+  test(
+    'multi-line text with status-lookalike lines and a relay password; '
+    'no secret on any command line',
+    () async {
+      final tmp = await Directory.systemTemp.createTemp('gator-e2e-');
+      addTearDown(() => tmp.delete(recursive: true));
+      // croc derives the relay room from the leading digits; use a prefix the
+      // other tests (7342-…) don't share so a cancelled run can't collide.
+      final code = '6158-gator-lines-${DateTime.now().millisecondsSinceEpoch}';
+      const text = '50% off | today\nwaiting for you\n\nsending love';
+      // The default public relay password works against `croc relay` too.
+      final base = GatorSettings.defaults().copyWith(
+        relay: relay,
+        pass: 'pass123',
+      );
+      final sender = CrocTransferService(crocPath: croc!);
+      final receiver = CrocTransferService(crocPath: croc);
+      final leaks = <String>[];
+      final sniff = Timer.periodic(const Duration(milliseconds: 100), (_) {
+        for (final e in Directory('/proc').listSync()) {
+          try {
+            final cmd = File('${e.path}/cmdline').readAsStringSync();
+            if (cmd.contains(code) || cmd.contains('pass123')) leaks.add(cmd);
+          } catch (_) {}
+        }
+      });
+      addTearDown(sniff.cancel);
+      final sendDone = run(
+        sender,
+        () => sender.startSend(
+          settings: base.copyWith(defaultCode: code),
+          files: const [],
+          excluded: const [],
+          text: text,
+        ),
+      );
+      await Future<void>.delayed(const Duration(seconds: 2));
+      final recvEvents = await run(
+        receiver,
+        () => receiver.startReceive(
+          settings: base,
+          code: code,
+          saveDir: tmp.path,
+          filesBefore: const {},
+        ),
+      );
+      final sendEvents = await sendDone;
+      sniff.cancel();
+      expect(recvEvents.whereType<CrocFinishedEvent>().single.exitCode, 0);
+      expect(recvEvents.whereType<CrocTextReceivedEvent>().map((e) => e.text), [
+        text,
+      ]);
+      expect(leaks, isEmpty, reason: 'secret visible in /proc/*/cmdline');
+      final logs = [
+        ...sendEvents,
+        ...recvEvents,
+      ].whereType<CrocLogEvent>().map((e) => e.message);
+      expect(logs.where((l) => l.contains('pass123')), isEmpty);
+    },
+    skip: skip ?? (Platform.isLinux ? null : '/proc sniff is Linux-only'),
+    timeout: const Timeout(Duration(seconds: 90)),
+  );
 }

@@ -44,6 +44,17 @@ void main() {
       expect(args, contains('--text'));
       expect(args, contains('hello world'));
     });
+
+    test('relay password is never on argv', () {
+      final args = buildSendArgs(
+        settings: GatorSettings.defaults().copyWith(pass: 's3cr3t'),
+        files: ['/tmp/a.txt'],
+        excluded: [],
+        text: '',
+      );
+      expect(args, isNot(contains('--pass')));
+      expect(args, isNot(contains('s3cr3t')));
+    });
   });
 
   test('Linux script(1) wrapper returns the croc exit code', () {
@@ -73,33 +84,33 @@ void main() {
   );
 
   group('buildShellCommand', () {
-    test('keeps env names unquoted so sh treats them as assignments', () {
-      final cmd = CrocTransferService.buildShellCommand(
-        ['croc', 'send'],
-        env: {'CROC_SECRET': "a b'c"},
-      );
-      expect(cmd, startsWith("CROC_SECRET='a b'\\''c' "));
-      expect(cmd, isNot(contains("'CROC_SECRET'=")));
-    });
-
-    test('skips names that are not valid shell identifiers', () {
-      final cmd = CrocTransferService.buildShellCommand(
-        ['croc'],
-        env: {'BAD-NAME': 'x', '1X': 'y', 'OK_1': 'z'},
-      );
-      expect(cmd, "OK_1='z' 'croc'");
+    test('single-quotes every arg and never inlines env', () {
+      final cmd = CrocTransferService.buildShellCommand([
+        'croc',
+        "a b'c",
+        'send',
+      ]);
+      expect(cmd, "'croc' 'a b'\\''c' 'send'");
+      expect(cmd, isNot(contains('CROC_SECRET')));
     });
 
     test(
-      'sh runs the command with the env value applied',
+      'secrets reach the child via the environment, not the command line',
       () async {
-        final cmd = CrocTransferService.buildShellCommand(
-          ['sh', '-c', r'printf %s "$CROC_SECRET"'],
-          env: {'CROC_SECRET': "7342-it's \$HOME `x`"},
+        const secret = "7342-it's \$HOME `x`";
+        final cmd = CrocTransferService.buildShellCommand([
+          'sh',
+          '-c',
+          r'printf %s "$CROC_SECRET"',
+        ]);
+        expect(cmd, isNot(contains('7342')));
+        final r = await Process.run(
+          'sh',
+          ['-c', cmd],
+          environment: {'CROC_SECRET': secret},
         );
-        final r = await Process.run('sh', ['-c', cmd]);
         expect(r.exitCode, 0, reason: '${r.stderr}');
-        expect(r.stdout, "7342-it's \$HOME `x`");
+        expect(r.stdout, secret);
       },
       testOn: 'linux || mac-os',
     );

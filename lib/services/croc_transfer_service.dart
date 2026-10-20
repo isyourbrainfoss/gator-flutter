@@ -80,7 +80,10 @@ class CrocTransferService {
       excluded: excluded,
       text: text,
     ).map((a) => a == crocBinary ? crocPath : a).toList();
-    final env = sendEnvForCode(settings.defaultCode);
+    final env = {
+      ...relayEnv(settings),
+      ...sendEnvForCode(settings.defaultCode),
+    };
     await _spawn(
       args,
       env: env.isEmpty ? null : env,
@@ -103,9 +106,9 @@ class CrocTransferService {
     final args = buildReceiveArgs(settings, out: saveDir)
         .map((a) => a == crocBinary ? crocPath : a)
         .toList();
-    // Only the croc-specific variables: the child already inherits the
-    // parent environment, and the Linux path inlines env into the command.
-    final env = receiveEnvForCode(normalized);
+    // Only the croc-specific variables: Process.start merges them into the
+    // inherited parent environment.
+    final env = {...relayEnv(settings), ...receiveEnvForCode(normalized)};
     await _spawn(
       args,
       env: env,
@@ -124,6 +127,9 @@ class CrocTransferService {
   }
 
   bool _sawFileIndicator = false;
+  // Raw receive output (capped) for [extractReceivedText].
+  final StringBuffer _rawOutput = StringBuffer();
+  static const _maxRawOutput = 4 * 1024 * 1024;
   // croc ≥ 11.5 prints "Receiving text message (N B)" and then a
   // "Receiving (ip<-ip)" line for text, which looks like a file transfer.
   bool _sawTextIndicator = false;
@@ -192,26 +198,15 @@ class CrocTransferService {
     return name;
   }
 
-  static final _envNameRe = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
-
-  /// Build a `sh -c` command line. Env assignments must keep the name
-  /// unquoted (`NAME='value'`): a quoted name (`'NAME'='value'`) is parsed by
-  /// sh as a command word and fails with "not found".
+  /// Build a `sh -c` command line from [args], each single-quoted.
+  ///
+  /// Secrets (`CROC_SECRET`, `CROC_PASS`) are deliberately NOT inlined here:
+  /// the command line of `script -c …` / `sh -c …` is world-readable via
+  /// ps and `/proc/<pid>/cmdline`. They are passed with `Process.start`'s
+  /// `environment:` and inherited by sh → croc instead.
   @visibleForTesting
-  static String buildShellCommand(
-    List<String> args, {
-    Map<String, String>? env,
-  }) {
-    final parts = <String>[];
-    if (env != null) {
-      for (final entry in env.entries) {
-        if (!_envNameRe.hasMatch(entry.key)) continue;
-        parts.add('${entry.key}=${_shellQuote(entry.value)}');
-      }
-    }
-    parts.addAll(args.map(_shellQuote));
-    return parts.join(' ');
-  }
+  static String buildShellCommand(List<String> args) =>
+      args.map(_shellQuote).join(' ');
 
   Future<Process> _startProcess(
     List<String> args, {
@@ -225,11 +220,12 @@ class CrocTransferService {
       // exits 0 and shows as "Complete".
       final script = await _resolveHostTool('script');
       final setsid = await _resolveHostTool('setsid');
-      final cmd = buildShellCommand(args, env: env);
+      final cmd = buildShellCommand(args);
       try {
         return await Process.start(
           setsid,
           [script, ...linuxScriptArgs(cmd)],
+          environment: env,
           workingDirectory: cwd,
           runInShell: false,
         );
@@ -238,6 +234,7 @@ class CrocTransferService {
           return await Process.start(
             script,
             linuxScriptArgs(cmd),
+            environment: env,
             workingDirectory: cwd,
             runInShell: false,
           );
@@ -248,6 +245,7 @@ class CrocTransferService {
             return Process.start(
               stdbuf,
               ['-oL', '-eL', 'sh', '-c', merged],
+              environment: env,
               workingDirectory: cwd,
               runInShell: false,
             );
@@ -255,6 +253,7 @@ class CrocTransferService {
           return Process.start(
             await _resolveHostTool('sh'),
             ['-c', merged],
+            environment: env,
             workingDirectory: cwd,
             runInShell: false,
           );
@@ -262,10 +261,11 @@ class CrocTransferService {
       }
     }
     if (Platform.isMacOS) {
-      final cmd = buildShellCommand(args, env: env);
+      final cmd = buildShellCommand(args);
       return Process.start(
         await _resolveHostTool('sh'),
         ['-c', '$cmd 2>&1'],
+        environment: env,
         workingDirectory: cwd,
         runInShell: false,
       );
@@ -323,7 +323,9 @@ class CrocTransferService {
     }
     _reset();
     _receiving = receiving;
-    final display = args.map((a) => a.contains(' ') ? '"$a"' : a).join(' ');
+    final display = redactArgv(
+      args,
+    ).map((a) => a.contains(' ') ? '"$a"' : a).join(' ');
     final mode = Platform.isLinux ? 'script' : 'direct';
     _emit(CrocLogEvent('Running ($mode): $display'));
 
@@ -377,6 +379,9 @@ class CrocTransferService {
   }
 
   void _consumeOutput(String chunk, void Function(String line) onLine) {
+    if (_receiving && _rawOutput.length < _maxRawOutput) {
+      _rawOutput.write(chunk);
+    }
     final (buf, segments) = splitCrocOutput(chunk, buffer: _readBuf);
     _readBuf = buf;
     for (final (segment, fromNewline) in segments) {
@@ -414,7 +419,7 @@ class CrocTransferService {
       if (_lines.length > kMaxLogLines) {
         _lines.removeRange(0, _lines.length - kMaxLogLines);
       }
-      _emit(CrocLogEvent(stripped));
+      _emit(CrocLogEvent(redactCrocLine(stripped)));
     }
     onLine(stripped);
   }
@@ -437,12 +442,24 @@ class CrocTransferService {
       receivedFiles = _sawFileIndicator;
     }
 
-    final textLines = _lines.where((ln) => !isCrocStatusLine(ln)).toList();
     var textDelivered = false;
+    final ok = _returnCode == 0 && !_canceled;
+
+    // croc ≥ 11.5 text: slice the exact payload from the raw output so lines
+    // that look like croc status ("50% off | today") are not dropped.
+    if (ok && !receivedFiles) {
+      final payload = extractReceivedText(_rawOutput.toString());
+      if (payload != null && payload.trim().isNotEmpty) {
+        _emit(CrocTextReceivedEvent(payload));
+        textDelivered = true;
+      }
+    }
+
+    final textLines = _lines.where((ln) => !isCrocStatusLine(ln)).toList();
 
     // A failed run's stderr (e.g. "sh: not found", relay errors) is not text.
-    if (_returnCode == 0 &&
-        !_canceled &&
+    if (!textDelivered &&
+        ok &&
         textLines.isNotEmpty &&
         !receivedFiles &&
         (!_sawFileIndicator || _sawTextIndicator)) {
@@ -529,6 +546,7 @@ class CrocTransferService {
     _lines.clear();
     _sawFileIndicator = false;
     _sawTextIndicator = false;
+    _rawOutput.clear();
     _returnCode = -1;
     _receiveContext = null;
     _waitReleased = null;

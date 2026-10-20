@@ -33,8 +33,40 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      - name: Start local croc relay (for test/croc_e2e_test.dart)
+        env:
+          CROC_VERSION: 11.5.4
+          CROC_SHA256: 577f2c4170fac3f8ab244e325cdeea5644788e1cd7620f592a5d365ee349d556
+        run: |
+          set -euo pipefail
+          TARBALL="croc_v${CROC_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$TARBALL" \
+            "https://github.com/schollz/croc/releases/download/v${CROC_VERSION}/${TARBALL}"
+          echo "${CROC_SHA256}  $RUNNER_TEMP/$TARBALL" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/croc-bin"
+          tar -xzf "$RUNNER_TEMP/$TARBALL" -C "$RUNNER_TEMP/croc-bin" croc
+          echo "$RUNNER_TEMP/croc-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/croc-bin/croc" --version
+          nohup "$RUNNER_TEMP/croc-bin/croc" relay --ports 9109,9110,9111,9112,9113 \
+            > "$RUNNER_TEMP/croc-relay.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if (exec 3<>/dev/tcp/127.0.0.1/9109) 2>/dev/null; then
+              echo "croc relay listening on 127.0.0.1:9109"
+              echo "GATOR_E2E_RELAY=127.0.0.1:9109" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::croc relay did not start"
+          cat "$RUNNER_TEMP/croc-relay.log"
+          exit 1
+
       - name: Test
         run: flutter test
+
+      - name: Croc relay log
+        if: always()
+        run: cat "$RUNNER_TEMP/croc-relay.log" || true
 
       - name: Build debug APK
         run: flutter build apk --debug

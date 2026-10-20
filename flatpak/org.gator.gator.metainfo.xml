@@ -24,6 +24,11 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.5.17" date="2026-10-20">
+      <description>
+        <p>Linux transfer fixes: receiving works again, custom send codes work, received text is shown, failed transfers no longer show as Complete, and croc's "newer version" notice is no longer mistaken for the code.</p>
+      </description>
+    </release>
     <release version="1.5.16" date="2026-10-07">
       <description>
         <p>croc 11.5.4 (bugfix/deps; no CLI breaking changes).</p>

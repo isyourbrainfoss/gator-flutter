@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gator/core/constants.dart';
 import 'package:gator/models/gator_settings.dart';
@@ -87,8 +89,9 @@ void main() {
       expect(args, contains('--debug'));
       expect(args, contains('--relay'));
       expect(args, contains('1.2.3.4:9009'));
-      expect(args, contains('--pass'));
-      expect(args, contains('s3cr3t'));
+      // relay password goes in CROC_PASS (relayEnv), never argv
+      expect(args, isNot(contains('--pass')));
+      expect(args, isNot(contains('s3cr3t')));
       expect(args, isNot(contains('--port')));
     });
   });
@@ -412,6 +415,166 @@ void main() {
     test('sets CROC_SECRET and skips empty', () {
       expect(sendEnvForCode('gator-test-code'), {'CROC_SECRET': 'gator-test-code'});
       expect(sendEnvForCode(''), isEmpty);
+    });
+  });
+
+  group('croc update notice', () {
+    test('is never taken as a transfer code', () {
+      expect(
+        extractCrocCodeFromLine(
+          'A newer croc version is available: v11.5.5 (current: v11.5.4).',
+        ),
+        isNull,
+      );
+      expect(extractCrocCodeFromLine('Run: croc update'), isNull);
+      expect(
+        extractCrocCodeFromLine('\x1B[1mRun: croc upgrade\x1B[0m'),
+        isNull,
+      );
+    });
+
+    test('real codes still parse', () {
+      expect(
+        extractCrocCodeFromLine('croc 1234-lion-stop-sofia'),
+        '1234-lion-stop-sofia',
+      );
+      expect(
+        extractCrocCodeFromLine(
+          'On the other computer, run: croc --relay x:9009 7777-a-b-c',
+        ),
+        '7777-a-b-c',
+      );
+    });
+
+    test('isCrocUpdateNotice', () {
+      expect(
+        isCrocUpdateNotice('A newer croc version is available: v11.5.5'),
+        isTrue,
+      );
+      expect(isCrocUpdateNotice('Run: croc update'), isTrue);
+      expect(isCrocUpdateNotice('croc 1234-lion-stop-sofia'), isFalse);
+    });
+
+    test('is not reported as a failure', () {
+      expect(
+        explainFromLogs([
+          'A newer croc version is available: v11.5.5 (current: v11.5.4).',
+          'Run: croc update',
+        ]),
+        isNull,
+      );
+    });
+  });
+
+  test('"no public relay available" maps to the relay hint', () {
+    expect(
+      explainCrocFailure('no public relay available'),
+      contains('croc relay'),
+    );
+  });
+
+  test('update notice lines are status, not received text', () {
+    expect(
+      isCrocStatusLine(
+        'A newer croc version is available: v11.5.5 (current: v11.5.4).',
+      ),
+      isTrue,
+    );
+    expect(isCrocStatusLine('Run: croc update'), isTrue);
+    expect(isCrocStatusLine('Hello from gator'), isFalse);
+  });
+
+  test('croc 11.5 text receive banner is a status line', () {
+    expect(isCrocStatusLine('Receiving text message (15 B)'), isTrue);
+    expect(isCrocStatusLine('Receiving (172.30.0.2<-127.0.0.1)'), isTrue);
+  });
+
+  group('secrets', () {
+    test('relayEnv carries the relay password', () {
+      expect(relayEnv(GatorSettings.defaults().copyWith(pass: ' pw ')), {
+        'CROC_PASS': 'pw',
+      });
+      expect(relayEnv(GatorSettings.defaults()), isEmpty);
+    });
+
+    test('redactArgv hides --pass, --text and --code values', () {
+      expect(
+        redactArgv([
+          'croc', '--pass', 's3cr3t', 'send', '--text', 'hello world', //
+          '--code', 'abc', '/tmp/f',
+        ]),
+        [
+          'croc',
+          '--pass',
+          '***',
+          'send',
+          '--text',
+          '***',
+          '--code',
+          '***',
+          '/tmp/f',
+        ],
+      );
+    });
+
+    test('redactCrocLine hides the relay password croc prints', () {
+      expect(
+        redactCrocLine('  croc --relay localhost:9209 --pass relaypw code-1'),
+        '  croc --relay localhost:9209 --pass *** code-1',
+      );
+    });
+  });
+
+  group('extractReceivedText', () {
+    test('keeps payload lines that look like croc status', () {
+      const payload =
+          '50% off | today\nwaiting for you\nReceiving (x)\n\nsending love';
+      final raw =
+          'connecting...\rwaiting for file list...   \r  \r'
+          'Receiving text message (${utf8.encode(payload).length} B)  \n\n'
+          'Receiving (172.30.0.2<-::1)\n'
+          '$payload\n'
+          'A newer croc version is available: v11.5.5 (current: v11.5.4).\n'
+          'Run: croc update\n';
+      expect(extractReceivedText(raw), payload);
+    });
+
+    test('handles PTY CRLF output from script(1)', () {
+      const payload = 'line one\nline two | 10%';
+      final raw =
+          'Receiving text message (${utf8.encode(payload).length} B)\r\n'
+          '\r\nReceiving (a<-b)\r\n${payload.replaceAll('\n', '\r\n')}\r\n';
+      expect(extractReceivedText(raw), payload);
+    });
+
+    test('UTF-8 byte size', () {
+      const payload = 'héllo ✓';
+      final raw =
+          'Receiving text message (${utf8.encode(payload).length} B)\n'
+          'Receiving (a<-b)\n$payload\n';
+      expect(extractReceivedText(raw), payload);
+    });
+
+    test(
+      'no peer line: lookalike payload line does not swallow earlier lines',
+      () {
+        const payload = 'line1\nReceiving (evil)\nline3';
+        final raw =
+            'Receiving text message (${utf8.encode(payload).length} B)\n$payload\n';
+        expect(extractReceivedText(raw), payload);
+      },
+    );
+
+    test('kB size strips the update trailer', () {
+      final payload = '${'x' * 2000}\nend';
+      final raw =
+          'Receiving text message (2.0 kB)\nReceiving (a<-b)\n'
+          '$payload\nA newer croc version is available: v9\nRun: croc update\n';
+      expect(extractReceivedText(raw), payload);
+    });
+
+    test('null without a text header', () {
+      expect(extractReceivedText("Receiving 'a.txt' (3 B)\n"), isNull);
     });
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:gator/core/constants.dart';
 import 'package:gator/models/gator_settings.dart';
 import 'package:gator/models/transfer_state.dart';
@@ -77,6 +79,7 @@ String? extractCrocCodeFromLine(String line) {
   final cleaned = stripAnsi(line).trim();
   if (cleaned.isEmpty) return null;
   final low = cleaned.toLowerCase();
+  if (isCrocUpdateNotice(cleaned)) return null;
   if (low.contains('getcroc.com') ||
       low.contains('http://') ||
       low.contains('https://')) {
@@ -115,9 +118,35 @@ String? extractCrocCodeFromLine(String line) {
       }
       code = token;
     }
-    if (code != null && code.isNotEmpty) return normalizeCrocCode(code);
+    if (code != null &&
+        code.isNotEmpty &&
+        !_crocSubcommands.contains(code.toLowerCase())) {
+      return normalizeCrocCode(code);
+    }
   }
   return null;
+}
+
+/// croc subcommands that can follow `croc` in a hint like "Run: croc update";
+/// they are never a transfer code.
+const _crocSubcommands = {
+  'update',
+  'upgrade',
+  'send',
+  'relay',
+  'help',
+  'h',
+  'version',
+};
+
+/// croc ≥ 11.5 prints "A newer croc version is available: vX (current: vY)."
+/// followed by "Run: croc update". Gator bundles its own croc, so this is
+/// noise and must not be mistaken for a transfer code or an error.
+bool isCrocUpdateNotice(String line) {
+  final low = stripAnsi(line).trim().toLowerCase();
+  return low.startsWith('a newer croc version is available') ||
+      low == 'run: croc update' ||
+      low == 'run: croc upgrade';
 }
 
 const _crocStatusPrefixes = [
@@ -144,6 +173,7 @@ const _crocStatusPrefixes = [
 
 const _crocStatusSubstrings = [
   'transfer finished',
+  'receiving text message',
   'code is invalid',
   'on unix systems',
   'croc_secret',
@@ -170,6 +200,7 @@ bool isCrocStatusLine(String line) {
   final s = stripAnsi(line).trim();
   if (s.isEmpty) return true;
   if (s.contains('|') && s.contains('%')) return true;
+  if (isCrocUpdateNotice(s)) return true;
   final low = s.toLowerCase();
   for (final prefix in _crocStatusPrefixes) {
     if (low.startsWith(prefix)) return true;
@@ -335,6 +366,7 @@ String? explainCrocFailure(String line) {
       low.contains('connection refused') ||
       low.contains('no such host') ||
       low.contains('lookup ') ||
+      low.contains('no public relay available') ||
       (low.contains('relay') && (low.contains('error') || low.contains('fail')))) {
     return 'Could not reach the croc relay. Check the network, or set a custom relay in Preferences.';
   }
@@ -401,8 +433,8 @@ List<String> buildGlobalArgs(GatorSettings settings) {
   final relay6 = settings.relay6.trim();
   if (relay6.isNotEmpty) args.addAll(['--relay6', relay6]);
 
-  final relayPass = settings.pass.trim();
-  if (relayPass.isNotEmpty) args.addAll(['--pass', relayPass]);
+  // The relay password travels in CROC_PASS (see [relayEnv]), never argv,
+  // so it is not visible to other local users via ps / /proc/<pid>/cmdline.
 
   if (settings.internalDns) args.add('--internal-dns');
   if (settings.debug) args.add('--debug');
@@ -448,6 +480,72 @@ List<String> buildReceiveArgs(GatorSettings settings, {String? out}) {
   final dest = (out ?? '').trim();
   if (dest.isNotEmpty) args.addAll(['--out', dest]);
   return args;
+}
+
+/// Env for the relay password (`CROC_PASS`), kept out of argv.
+Map<String, String> relayEnv(GatorSettings settings) {
+  final pass = settings.pass.trim();
+  return pass.isEmpty ? const {} : {'CROC_PASS': pass};
+}
+
+const _redactFlags = {'--pass', '--code', '--text'};
+
+/// Copy of [argv] with the values of secret flags replaced by `***`.
+List<String> redactArgv(List<String> argv) {
+  final out = <String>[];
+  var hideNext = false;
+  for (final arg in argv) {
+    if (hideNext) {
+      out.add('***');
+      hideNext = false;
+      continue;
+    }
+    out.add(arg);
+    if (_redactFlags.contains(arg)) hideNext = true;
+  }
+  return out;
+}
+
+final _passInLineRe = RegExp(r'(--pass\s+)\S+', caseSensitive: false);
+
+/// Hides `--pass` values that croc ≥ 11.5 prints in its send instructions.
+String redactCrocLine(String line) =>
+    line.replaceAllMapped(_passInLineRe, (m) => '${m[1]}***');
+
+final _textHeaderRe = RegExp(
+  r'Receiving text message \((\d+(?:\.\d+)?) ([kMGTPE]?)B\)[^\n]*\n',
+);
+// Peer line croc prints right after the text header (blank lines allowed).
+// Only matched at the header end so payload lines that look like it survive.
+final _peerLineRe = RegExp(r'(?:[^\S\n]*\n)*Receiving \([^)\n]*\)[^\S\n]*\n');
+final _textTrailerRe = RegExp(
+  r'\n?(?:A newer croc version is available[^\n]*\n?(?:Run: croc update\n?)?)\s*$',
+);
+
+/// Text payload from raw croc receive output, or null if croc did not
+/// report a text message.
+///
+/// croc prints `Receiving text message (N B)`, the peer line
+/// `Receiving (a<-b)`, then the message verbatim. Line-based status
+/// filtering drops payload lines that merely look like status (`50% off |`,
+/// `waiting for you`), so slice the raw output instead. PTY (`script`)
+/// output uses CRLF; it is normalised before slicing.
+String? extractReceivedText(String raw) {
+  final text = stripAnsi(raw).replaceAll('\r\n', '\n');
+  final header = _textHeaderRe.firstMatch(text);
+  if (header == null) return null;
+  final peer = _peerLineRe.matchAsPrefix(text, header.end);
+  final body = text.substring(peer?.end ?? header.end);
+  if ((header[2] ?? '').isEmpty) {
+    final size = double.parse(header[1]!).toInt();
+    final encoded = utf8.encode(body);
+    if (encoded.length >= size) {
+      return utf8.decode(encoded.sublist(0, size), allowMalformed: true);
+    }
+  }
+  return body
+      .replaceFirst(_textTrailerRe, '')
+      .replaceFirst(RegExp(r'\n+$'), '');
 }
 
 /// Env vars croc v10+ expects for non-TTY receive.

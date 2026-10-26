@@ -101,7 +101,7 @@ flutter run   # Android device/emulator, or -d linux for desktop dev
 ### Build assets
 
 ```bash
-./tool/build_croc_android.sh   # croc 11.5.4 (requires Go 1.27+)
+./tool/build_croc_android.sh   # croc 11.5.5 (requires Go 1.27.1+)
 ./tool/generate_icons.sh       # launcher icons from GTK SVG
 ```
 

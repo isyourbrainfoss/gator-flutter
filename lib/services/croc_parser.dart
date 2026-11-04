@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:gator/core/constants.dart';
 import 'package:gator/models/gator_settings.dart';
 import 'package:gator/models/transfer_state.dart';
@@ -79,6 +81,7 @@ String? extractCrocCodeFromLine(String line) {
   final cleaned = stripAnsi(line).trim();
   if (cleaned.isEmpty) return null;
   final low = cleaned.toLowerCase();
+  if (isCrocUpdateNotice(cleaned)) return null;
   if (low.contains('getcroc.com') ||
       low.contains('http://') ||
       low.contains('https://')) {
@@ -117,9 +120,37 @@ String? extractCrocCodeFromLine(String line) {
       }
       code = token;
     }
-    if (code != null && code.isNotEmpty) return normalizeCrocCode(code);
+    if (code != null &&
+        code.isNotEmpty &&
+        !_crocSubcommands.contains(code.toLowerCase())) {
+      return normalizeCrocCode(code);
+    }
   }
   return null;
+}
+
+/// croc subcommands that can follow `croc` in a hint like "Run: croc update";
+/// they are never a transfer code.
+const _crocSubcommands = {
+  'update',
+  'upgrade',
+  'send',
+  'relay',
+  'help',
+  'h',
+  'version',
+};
+
+/// croc ≥ 11.5 prints "A newer croc version is available: vX (current: vY)."
+/// followed by "Run: croc update". Gator bundles its own croc, so this is
+/// noise: never a transfer code, an error, or part of received text.
+bool isCrocUpdateNotice(String line) {
+  final low = stripAnsi(line).trim().toLowerCase();
+  return low.startsWith('a newer croc version is available') ||
+      low.startsWith('could not check for a newer croc version') ||
+      low.startsWith('no newer croc version is available') ||
+      low == 'run: croc update' ||
+      low == 'run: croc upgrade';
 }
 
 const _crocStatusPrefixes = [
@@ -146,6 +177,7 @@ const _crocStatusPrefixes = [
 
 const _crocStatusSubstrings = [
   'transfer finished',
+  'receiving text message',
   'code is invalid',
   'on unix systems',
   'croc_secret',
@@ -172,6 +204,7 @@ bool isCrocStatusLine(String line) {
   final s = stripAnsi(line).trim();
   if (s.isEmpty) return true;
   if (s.contains('|') && s.contains('%')) return true;
+  if (isCrocUpdateNotice(s)) return true;
   final low = s.toLowerCase();
   for (final prefix in _crocStatusPrefixes) {
     if (low.startsWith(prefix)) return true;
@@ -343,6 +376,7 @@ String? explainCrocFailure(String line) {
       low.contains('connection refused') ||
       low.contains('no such host') ||
       low.contains('lookup ') ||
+      low.contains('no public relay available') ||
       (low.contains('relay') && (low.contains('error') || low.contains('fail')))) {
     return 'Could not reach the croc relay. Check the network, or set a custom relay in Preferences.';
   }
@@ -456,6 +490,86 @@ List<String> buildReceiveArgs(GatorSettings settings, {String? out}) {
   final dest = (out ?? '').trim();
   if (dest.isNotEmpty) args.addAll(['--out', dest]);
   return args;
+}
+
+/// True if croc announced a text (not file) transfer in [line].
+bool isTextReceiveHeader(String line) =>
+    stripAnsi(line).toLowerCase().contains('receiving text message');
+
+final _textHeaderRe = RegExp(
+  r'Receiving text message \((\d+(?:\.\d+)?) ([kMGTPE]?)B\)[^\n]*\n',
+);
+// Peer line croc prints right after the text header (blank lines allowed).
+// Only matched at the header end so payload lines that look like it survive.
+final _peerLineRe = RegExp(r'(?:[^\S\n]*\n)*Receiving \([^)\n]*\)[^\S\n]*\n');
+final _textTrailerRe = RegExp(
+  r'\n?(?:A newer croc version is available[^\n]*\n?(?:Run: croc update\n?)?)\s*$',
+);
+final _crocLogLineRe = RegExp(r'^\[(?:trace|debug|info|warn|error)\]\t');
+
+/// Exact byte size from croc's `Receiving text message (N B)` header, or null
+/// when croc printed a rounded size (`1.2 kB`) or no header at all.
+int? _textHeaderByteCount(String text) {
+  final header = _textHeaderRe.firstMatch(text);
+  if (header == null || (header[2] ?? '').isNotEmpty) return null;
+  return double.parse(header[1]!).toInt();
+}
+
+String _takeBytes(String body, int? size) {
+  if (size == null) return body;
+  final encoded = utf8.encode(body);
+  if (encoded.length < size) return body;
+  return utf8.decode(encoded.sublist(0, size), allowMalformed: true);
+}
+
+/// Text payload from raw, *merged* (PTY or `2>&1`) croc receive output, or
+/// null if croc did not report a text message.
+///
+/// croc prints `Receiving text message (N B)`, the peer line
+/// `Receiving (a<-b)`, then the message verbatim. Line-based status
+/// filtering drops payload lines that merely look like status (`50% off |`,
+/// `waiting for you`), so slice the raw output instead. PTY (`script`)
+/// output uses CRLF; it is normalised before slicing.
+String? extractReceivedText(String raw) {
+  final text = stripAnsi(raw).replaceAll('\r\n', '\n');
+  final header = _textHeaderRe.firstMatch(text);
+  if (header == null) return null;
+  final peer = _peerLineRe.matchAsPrefix(text, header.end);
+  final body = text.substring(peer?.end ?? header.end);
+  final size = _textHeaderByteCount(text);
+  if (size != null && utf8.encode(body).length >= size) {
+    return _takeBytes(body, size);
+  }
+  return body
+      .replaceFirst(_textTrailerRe, '')
+      .replaceFirst(RegExp(r'\n+$'), '');
+}
+
+/// Text payload when croc's stdout and stderr were captured separately
+/// (Android, Windows: no PTY).
+///
+/// croc writes its status lines (`Receiving text message (N B)`, the peer
+/// line, the update notice) to stderr and the received text verbatim to
+/// stdout, so the payload is stdout itself. Returns null when neither
+/// stream has a text header (a file transfer).
+String? extractReceivedTextFromStreams({
+  required String stdout,
+  required String stderr,
+}) {
+  final status = '${stripAnsi(stderr).replaceAll('\r\n', '\n')}\n';
+  if (_textHeaderRe.firstMatch(status) == null) {
+    // Header not on stderr (unexpected build): fall back to slicing.
+    return extractReceivedText('$stderr\n$stdout');
+  }
+  var body = stdout.replaceAll('\r\n', '\n');
+  // `--debug` logs also go to stdout; they are never part of the payload.
+  if (body.contains('[')) {
+    body = body
+        .split('\n')
+        .where((ln) => !_crocLogLineRe.hasMatch(ln))
+        .join('\n');
+  }
+  return _takeBytes(body, _textHeaderByteCount(status));
 }
 
 /// Env vars croc v10+ expects for non-TTY receive.

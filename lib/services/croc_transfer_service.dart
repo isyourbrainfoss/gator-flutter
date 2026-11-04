@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:gator/core/constants.dart';
 import 'package:gator/core/logger.dart';
@@ -57,7 +58,10 @@ class CrocTransferService {
   bool _canceled = false;
   bool _finished = false;
   bool _receiving = false;
+  // Separate line buffers: on Android stdout and stderr are two pipes, and a
+  // partial line on one must not be glued to the other's output.
   String _readBuf = '';
+  String _errBuf = '';
   final List<String> _lines = [];
   double? _lastProgress;
 
@@ -122,6 +126,14 @@ class CrocTransferService {
   }
 
   bool _sawFileIndicator = false;
+  // croc ≥ 11.5 prints "Receiving text message (N B)" and then a
+  // "Receiving (ip<-ip)" line for text, which looks like a file transfer.
+  bool _sawTextIndicator = false;
+  // Raw receive output (capped) for received-text extraction.
+  final StringBuffer _rawOutput = StringBuffer();
+  final StringBuffer _rawStdout = StringBuffer();
+  final StringBuffer _rawStderr = StringBuffer();
+  static const _maxRawOutput = 4 * 1024 * 1024;
   int _returnCode = -1;
 
   void _handleReceiveLine(
@@ -130,6 +142,7 @@ class CrocTransferService {
     Set<String> filesBefore,
   ) {
     final cleaned = stripAnsi(line);
+    if (isTextReceiveHeader(cleaned)) _sawTextIndicator = true;
     if (cleaned.contains('Receiving file (') ||
         cleaned.contains('Receiving (') ||
         parseProgressLine(cleaned) != null) {
@@ -197,7 +210,7 @@ class CrocTransferService {
     Map<String, String>? env,
     String? cwd,
   }) async {
-    if (Platform.isLinux) {
+    if (Platform.isLinux && !debugDirectSpawn) {
       // script(1) allocates a PTY so croc flushes the receive code immediately.
       // setsid so cancel can kill the whole process group (script → sh → croc).
       final script = await _resolveHostTool('script');
@@ -238,7 +251,7 @@ class CrocTransferService {
         }
       }
     }
-    if (Platform.isMacOS) {
+    if (Platform.isMacOS && !debugDirectSpawn) {
       final cmd = _buildShellCommand(args, env: env);
       return Process.start(
         await _resolveHostTool('sh'),
@@ -301,7 +314,7 @@ class CrocTransferService {
     _reset();
     _receiving = receiving;
     final display = args.map((a) => a.contains(' ') ? '"$a"' : a).join(' ');
-    final mode = Platform.isLinux ? 'script' : 'direct';
+    final mode = Platform.isLinux && !debugDirectSpawn ? 'script' : 'direct';
     _emit(CrocLogEvent('Running ($mode): $display'));
 
     _process = await _startProcess(args, env: env, cwd: cwd);
@@ -321,7 +334,7 @@ class CrocTransferService {
     _stdoutSub = _process!.stdout
         .transform(const Utf8Decoder(allowMalformed: true))
         .listen(
-          (chunk) => _consumeOutput(chunk, onLine),
+          (chunk) => _consumeOutput(chunk, onLine, stderr: false),
           onDone: () => completeOnce(stdoutClosed),
           onError: (e, st) {
             GatorLog.e('CrocTransferService', 'stdout error', e, st);
@@ -332,7 +345,7 @@ class CrocTransferService {
     _stderrSub = _process!.stderr
         .transform(const Utf8Decoder(allowMalformed: true))
         .listen(
-          (chunk) => _consumeOutput(chunk, onLine),
+          (chunk) => _consumeOutput(chunk, onLine, stderr: true),
           onDone: () => completeOnce(stderrClosed),
           onError: (e, st) {
             GatorLog.e('CrocTransferService', 'stderr error', e, st);
@@ -353,15 +366,28 @@ class CrocTransferService {
     if (!_finished) _finish(_returnCode);
   }
 
-  void _consumeOutput(String chunk, void Function(String line) onLine) {
-    final (buf, segments) = splitCrocOutput(chunk, buffer: _readBuf);
-    _readBuf = buf;
+  void _consumeOutput(
+    String chunk,
+    void Function(String line) onLine, {
+    required bool stderr,
+  }) {
+    if (_receiving && _rawOutput.length < _maxRawOutput) {
+      _rawOutput.write(chunk);
+      (stderr ? _rawStderr : _rawStdout).write(chunk);
+    }
+    final (buf, segments) =
+        splitCrocOutput(chunk, buffer: stderr ? _errBuf : _readBuf);
+    if (stderr) {
+      _errBuf = buf;
+    } else {
+      _readBuf = buf;
+    }
     for (final (segment, fromNewline) in segments) {
       _emitSegment(segment, fromNewline: fromNewline, onLine: onLine);
     }
     // Probe trailing buffer for a receive code only — do not emit progress
     // twice from an incomplete \r line.
-    final trailing = _readBuf.replaceAll(RegExp(r'[\r\n]+$'), '');
+    final trailing = buf.replaceAll(RegExp(r'[\r\n]+$'), '');
     if (trailing.isNotEmpty) {
       final code = extractCrocCodeFromLine(trailing);
       if (code != null && code.isNotEmpty) {
@@ -371,12 +397,25 @@ class CrocTransferService {
   }
 
   void _flushBuffer(void Function(String line) onLine) {
-    final trailing = _readBuf.trim();
-    if (trailing.isNotEmpty) {
-      _emitSegment(trailing, fromNewline: true, onLine: onLine);
+    for (final pending in [_readBuf, _errBuf]) {
+      final trailing = pending.trim();
+      if (trailing.isNotEmpty) {
+        _emitSegment(trailing, fromNewline: true, onLine: onLine);
+      }
     }
     _readBuf = '';
+    _errBuf = '';
   }
+
+  /// True when croc's stdout and stderr reach us as separate pipes (no PTY
+  /// and no `2>&1`), i.e. Android and Windows.
+  static bool get _separateStreams =>
+      debugDirectSpawn || (!Platform.isLinux && !Platform.isMacOS);
+
+  /// Tests: spawn croc directly with separate stdout/stderr pipes, as on
+  /// Android, instead of the Linux script(1) PTY wrapper.
+  @visibleForTesting
+  static bool debugDirectSpawn = false;
 
   void _emitSegment(
     String segment, {
@@ -414,10 +453,30 @@ class CrocTransferService {
       receivedFiles = _sawFileIndicator;
     }
 
-    final textLines = _lines.where((ln) => !isCrocStatusLine(ln)).toList();
     var textDelivered = false;
+    final ok = _returnCode == 0 && !_canceled;
 
-    if (textLines.isNotEmpty && !receivedFiles && !_sawFileIndicator) {
+    if (ok && !receivedFiles) {
+      final payload = resolveReceivedText(
+        merged: _rawOutput.toString(),
+        stdout: _rawStdout.toString(),
+        stderr: _rawStderr.toString(),
+        separateStreams: _separateStreams,
+      );
+      if (payload != null && payload.trim().isNotEmpty) {
+        _emit(CrocTextReceivedEvent(payload));
+        textDelivered = true;
+      }
+    }
+
+    final textLines = _lines.where((ln) => !isCrocStatusLine(ln)).toList();
+
+    // A failed run's output (relay errors, "not found") is never text.
+    if (!textDelivered &&
+        ok &&
+        textLines.isNotEmpty &&
+        !receivedFiles &&
+        (!_sawFileIndicator || _sawTextIndicator)) {
       final text = textLines.join('\n').trim();
       if (text.isNotEmpty) {
         _emit(CrocTextReceivedEvent(text));
@@ -432,6 +491,20 @@ class CrocTransferService {
     if (_returnCode == 0 && !_canceled && receivedFiles && !textDelivered) {
       _emit(const CrocTransferCompleteEvent());
     }
+  }
+
+  /// Received text from captured croc output, or null for a file transfer.
+  @visibleForTesting
+  static String? resolveReceivedText({
+    required String merged,
+    required String stdout,
+    required String stderr,
+    required bool separateStreams,
+  }) {
+    if (separateStreams) {
+      return extractReceivedTextFromStreams(stdout: stdout, stderr: stderr);
+    }
+    return extractReceivedText(merged);
   }
 
   Future<bool> _checkTempTextFile(String saveDir) async {
@@ -498,8 +571,13 @@ class CrocTransferService {
     _canceled = false;
     _finished = false;
     _readBuf = '';
+    _errBuf = '';
     _lines.clear();
     _sawFileIndicator = false;
+    _sawTextIndicator = false;
+    _rawOutput.clear();
+    _rawStdout.clear();
+    _rawStderr.clear();
     _returnCode = -1;
     _receiveContext = null;
     _waitReleased = null;

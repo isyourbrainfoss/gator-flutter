@@ -96,7 +96,8 @@ void main() {
 
       expect(find.text('Transfer code'), findsOneWidget);
       expect(find.text('Paste from Clipboard'), findsOneWidget);
-      expect(find.text('Scan QR from Image'), findsOneWidget);
+      // QR scanning (camera and image) is Android-only (native ZXing).
+      expect(find.text('Scan QR from Image'), findsNothing);
       expect(find.text('Scan QR Code'), findsNothing);
       expect(find.text('Start Receiving'), findsOneWidget);
       expect(

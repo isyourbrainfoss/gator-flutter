@@ -41,12 +41,18 @@ class MainActivity : FlutterFragmentActivity() {
         pendingQrResult = null
         if (callback == null) return@registerForActivityResult
 
-        if (activityResult.resultCode == RESULT_OK) {
-            callback.success(
-                activityResult.data?.getStringExtra(QrScannerActivity.EXTRA_RESULT),
+        val data = activityResult.data
+        when (activityResult.resultCode) {
+            RESULT_OK -> callback.success(
+                data?.getStringExtra(QrScannerActivity.EXTRA_RESULT),
             )
-        } else {
-            callback.success(null)
+            QrScannerActivity.RESULT_ERROR -> callback.error(
+                data?.getStringExtra(QrScannerActivity.EXTRA_ERROR_CODE) ?: "CAMERA",
+                data?.getStringExtra(QrScannerActivity.EXTRA_ERROR_MESSAGE),
+                null,
+            )
+            // User closed the scanner.
+            else -> callback.success(null)
         }
     }
 
@@ -168,7 +174,43 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         pendingQrResult = result
                         Log.i(TAG, "Launching native QR scanner")
-                        qrScanLauncher.launch(Intent(this, QrScannerActivity::class.java))
+                        try {
+                            qrScanLauncher.launch(Intent(this, QrScannerActivity::class.java))
+                        } catch (e: Exception) {
+                            pendingQrResult = null
+                            Log.e(TAG, "Could not launch QR scanner", e)
+                            result.error("CAMERA", e.message, null)
+                        }
+                    }
+                    "decodeQrImage" -> {
+                        val path = call.argument<String>("path")
+                        if (path.isNullOrEmpty()) {
+                            result.error("ARGS", "path is required", null)
+                            return@setMethodCallHandler
+                        }
+                        ioExecutor.execute {
+                            val decoded = try {
+                                QrDecoder().decodeImageFile(path)
+                            } catch (e: Throwable) {
+                                Log.w(TAG, "QR image decode failed", e)
+                                null
+                            }
+                            mainHandler.post { result.success(decoded) }
+                        }
+                    }
+                    "openAppSettings" -> {
+                        try {
+                            startActivity(
+                                Intent(
+                                    android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.fromParts("package", packageName, null),
+                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                            result.success(true)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Could not open app settings", e)
+                            result.success(false)
+                        }
                     }
                     else -> result.notImplemented()
                 }

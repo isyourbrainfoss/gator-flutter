@@ -8,6 +8,7 @@ void showGatorSnackBar(
   BuildContext context,
   String message, {
   bool error = false,
+  SnackBarAction? action,
 }) {
   final messenger =
       gatorScaffoldMessengerKey.currentState ?? ScaffoldMessenger.maybeOf(context);
@@ -21,7 +22,8 @@ void showGatorSnackBar(
         message,
         style: error ? TextStyle(color: scheme.onErrorContainer) : null,
       ),
-      duration: const Duration(seconds: 3),
+      duration: Duration(seconds: action == null ? 3 : 6),
+      action: action,
       behavior: SnackBarBehavior.floating,
       showCloseIcon: true,
       width: wide ? 420 : null,

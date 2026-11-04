@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -7,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'package:gator/core/constants.dart';
 import 'package:gator/core/logger.dart';
@@ -97,7 +95,7 @@ class _ReceivePageState extends ConsumerState<ReceivePage> {
         state.complete ||
         state.phase == TransferPhase.error ||
         state.errorMessage.isNotEmpty;
-    final showCamera = !kIsWeb && Platform.isAndroid;
+    final showCamera = !kIsWeb && QrScannerService.isSupported;
 
     return ConstrainedContent(
       child: ListView(
@@ -163,14 +161,15 @@ class _ReceivePageState extends ConsumerState<ReceivePage> {
                   label: const Text('Scan QR Code'),
                   tooltip: 'Scan QR Code',
                 ),
-              AdaptiveOutlinedButton(
-                onPressed: state.transferring
-                    ? null
-                    : () => _pickQrImage(context, notifier),
-                icon: const Icon(Icons.image),
-                label: const Text('Scan QR from Image'),
-                tooltip: 'Scan QR from Image',
-              ),
+              if (showCamera)
+                AdaptiveOutlinedButton(
+                  onPressed: state.transferring
+                      ? null
+                      : () => _pickQrImage(context, notifier),
+                  icon: const Icon(Icons.image),
+                  label: const Text('Scan QR from Image'),
+                  tooltip: 'Scan QR from Image',
+                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -363,64 +362,49 @@ class _ReceivePageState extends ConsumerState<ReceivePage> {
     ReceiveNotifier notifier,
   ) async {
     try {
-      String? code = await QrScannerService.scanCamera();
-      if (code == null && context.mounted && Platform.isAndroid) {
-        // Native scanner unavailable — Flutter fallback.
-        code = await Navigator.push<String>(
-          context,
-          MaterialPageRoute(builder: (_) => const _QrScannerPage()),
-        );
-      }
-      if (code != null) {
-        final normalized = normalizeCrocCode(code);
-        _codeController.text = normalized;
-        notifier.pasteCode(code);
-      }
-    } on PlatformException catch (e, st) {
+      final code = await QrScannerService.scanCamera();
+      // null: the user closed the scanner — nothing to do.
+      if (code != null) _applyScannedCode(code, notifier);
+    } on QrScanException catch (e) {
+      GatorLog.w('ReceivePage', 'QR scan failed: $e');
+      if (!context.mounted) return;
+      showGatorSnackBar(
+        context,
+        e.message,
+        error: true,
+        action: e.failure == QrScanFailure.permissionPermanentlyDenied
+            ? SnackBarAction(
+                label: 'Settings',
+                onPressed: () => unawaited(QrScannerService.openAppSettings()),
+              )
+            : null,
+      );
+    } catch (e, st) {
       GatorLog.e('ReceivePage', 'QR scan failed', e, st);
       if (context.mounted) {
         showGatorSnackBar(
           context,
-          e.code == 'PERMISSION'
-              ? 'Camera permission is required to scan QR codes'
-              : 'Could not open the camera',
+          QrScannerService.messageFor(QrScanFailure.camera),
           error: true,
         );
       }
-    } catch (e, st) {
-      GatorLog.e('ReceivePage', 'QR scan failed', e, st);
-      if (context.mounted) {
-        showGatorSnackBar(context, 'Could not open the camera', error: true);
-      }
     }
+  }
+
+  void _applyScannedCode(String code, ReceiveNotifier notifier) {
+    _codeController.text = normalizeCrocCode(code);
+    notifier.pasteCode(code);
   }
 
   Future<void> _pickQrImage(
     BuildContext context,
     ReceiveNotifier notifier,
   ) async {
+    final XFile? image;
     try {
-      final picker = ImagePicker();
-      final image = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1280,
-      );
-      if (image == null) return;
-      final controller = MobileScannerController();
-      try {
-        final result = await controller.analyzeImage(image.path);
-        final code = result?.barcodes.firstOrNull?.rawValue;
-        if (code != null) {
-          _codeController.text = normalizeCrocCode(code);
-          notifier.pasteCode(code);
-        } else if (context.mounted) {
-          showGatorSnackBar(context, 'No QR code found in image');
-        }
-      } finally {
-        await controller.dispose();
-      }
+      image = await ImagePicker().pickImage(source: ImageSource.gallery);
     } catch (e, st) {
-      GatorLog.e('ReceivePage', 'QR from image failed', e, st);
+      GatorLog.e('ReceivePage', 'Image picker failed', e, st);
       if (context.mounted) {
         showGatorSnackBar(
           context,
@@ -428,135 +412,21 @@ class _ReceivePageState extends ConsumerState<ReceivePage> {
           error: true,
         );
       }
+      return;
     }
-  }
-}
-
-class _QrScannerPage extends StatefulWidget {
-  const _QrScannerPage();
-
-  @override
-  State<_QrScannerPage> createState() => _QrScannerPageState();
-}
-
-class _QrScannerPageState extends State<_QrScannerPage>
-    with WidgetsBindingObserver {
-  late final MobileScannerController _controller;
-  StreamSubscription<Object?>? _subscription;
-  bool _found = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _controller = MobileScannerController(
-      autoStart: false,
-      detectionSpeed: DetectionSpeed.noDuplicates,
-      facing: CameraFacing.back,
-      formats: const [BarcodeFormat.qrCode],
-    );
-    _subscription = _controller.barcodes.listen(_onDetect);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startScanner());
-  }
-
-  Future<void> _startScanner() async {
+    if (image == null) return;
     try {
-      await _controller.start();
-    } on MobileScannerException catch (e) {
-      GatorLog.w('QrScannerPage', 'start failed: $e');
+      final code = await QrScannerService.decodeImage(image.path);
+      if (code != null && code.isNotEmpty) {
+        _applyScannedCode(code, notifier);
+      } else if (context.mounted) {
+        showGatorSnackBar(context, 'No QR code found in image');
+      }
+    } catch (e, st) {
+      GatorLog.e('ReceivePage', 'QR from image failed', e, st);
+      if (context.mounted) {
+        showGatorSnackBar(context, 'Could not read that image', error: true);
+      }
     }
-  }
-
-  void _onDetect(BarcodeCapture capture) {
-    if (_found) return;
-    final code = capture.barcodes.firstOrNull?.rawValue;
-    if (code != null && code.isNotEmpty) {
-      _found = true;
-      Navigator.pop(context, code);
-    }
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!_controller.value.hasCameraPermission) return;
-
-    switch (state) {
-      case AppLifecycleState.resumed:
-        unawaited(_startScanner());
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.paused:
-      case AppLifecycleState.detached:
-      case AppLifecycleState.hidden:
-        unawaited(_controller.stop());
-    }
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    unawaited(_subscription?.cancel());
-    unawaited(_controller.dispose());
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scan QR Code'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.flash_on),
-            tooltip: 'Toggle torch',
-            onPressed: () => _controller.toggleTorch(),
-          ),
-        ],
-      ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          MobileScanner(
-            controller: _controller,
-            useAppLifecycleState: false,
-            errorBuilder: (context, error) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  error.errorCode.message.toLowerCase().contains('permission')
-                      ? 'Camera permission is required to scan QR codes'
-                      : (error.errorDetails?.message ?? error.errorCode.message),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-          ),
-          IgnorePointer(
-            child: Center(
-              child: Container(
-                width: 240,
-                height: 240,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Colors.white70,
-                    width: 2,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-            ),
-          ),
-          const Positioned(
-            bottom: 32,
-            left: 24,
-            right: 24,
-            child: Text(
-              'Align the code in the frame',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

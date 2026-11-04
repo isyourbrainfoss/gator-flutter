@@ -81,5 +81,7 @@ dependencies {
     implementation("androidx.camera:camera-camera2:$cameraVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraVersion")
     implementation("androidx.camera:camera-view:$cameraVersion")
-    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    // ZXing (Apache-2.0): QR decoding without Google Play Services / ML Kit,
+    // so the scanner works on de-Googled and microG ROMs (F-Droid friendly).
+    implementation("com.google.zxing:core:3.5.3")
 }

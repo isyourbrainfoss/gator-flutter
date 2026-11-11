@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gator/models/gator_settings.dart';
 import 'package:gator/services/croc_transfer_service.dart';
@@ -42,5 +44,75 @@ void main() {
       expect(args, contains('--text'));
       expect(args, contains('hello world'));
     });
+
+    test('relay password is never on argv', () {
+      final args = buildSendArgs(
+        settings: GatorSettings.defaults().copyWith(pass: 's3cr3t'),
+        files: ['/tmp/a.txt'],
+        excluded: [],
+        text: '',
+      );
+      expect(args, isNot(contains('--pass')));
+      expect(args, isNot(contains('s3cr3t')));
+    });
+  });
+
+  test('Linux script(1) wrapper returns the croc exit code', () {
+    final args = CrocTransferService.linuxScriptArgs("'croc' 'send'");
+    expect(args, containsAllInOrder(['-q', '-e', '-c', "'croc' 'send'"]));
+    expect(args.last, '/dev/null');
+  });
+
+  test(
+    'Linux script(1) wrapper propagates a failing exit code',
+    () async {
+      final script = ['/usr/bin/script', '/bin/script'].firstWhere(
+        (p) => File(p).existsSync(),
+        orElse: () => '',
+      );
+      if (script.isEmpty) {
+        markTestSkipped('script(1) not installed');
+        return;
+      }
+      final r = await Process.run(
+        script,
+        CrocTransferService.linuxScriptArgs('exit 3'),
+      );
+      expect(r.exitCode, 3);
+    },
+    testOn: 'linux',
+  );
+
+  group('buildShellCommand', () {
+    test('single-quotes every arg and never inlines env', () {
+      final cmd = CrocTransferService.buildShellCommand([
+        'croc',
+        "a b'c",
+        'send',
+      ]);
+      expect(cmd, "'croc' 'a b'\\''c' 'send'");
+      expect(cmd, isNot(contains('CROC_SECRET')));
+    });
+
+    test(
+      'secrets reach the child via the environment, not the command line',
+      () async {
+        const secret = "7342-it's \$HOME `x`";
+        final cmd = CrocTransferService.buildShellCommand([
+          'sh',
+          '-c',
+          r'printf %s "$CROC_SECRET"',
+        ]);
+        expect(cmd, isNot(contains('7342')));
+        final r = await Process.run(
+          'sh',
+          ['-c', cmd],
+          environment: {'CROC_SECRET': secret},
+        );
+        expect(r.exitCode, 0, reason: '${r.stderr}');
+        expect(r.stdout, secret);
+      },
+      testOn: 'linux || mac-os',
+    );
   });
 }

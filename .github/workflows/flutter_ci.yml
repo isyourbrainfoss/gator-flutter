@@ -11,6 +11,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # The Android build has run the runner out of disk; drop unused toolchains.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          df -h /
+
       - uses: actions/checkout@v4
 
       - name: Install Go
@@ -38,3 +45,22 @@ jobs:
 
       - name: Build debug APK
         run: flutter build apk --debug
+
+      # The QR scanner must work without Google Play Services (de-Googled /
+      # microG ROMs, F-Droid): fail if ML Kit or GMS sneaks back in.
+      - name: Check APK has no ML Kit / Play Services
+        run: |
+          apk=build/app/outputs/flutter-apk/app-debug.apk
+          if unzip -l "$apk" | grep -Ei 'barhopper|mlkit|play-services' ||
+             unzip -p "$apk" 'classes*.dex' | strings |
+               grep -m3 -E 'Lcom/google/(mlkit|android/gms)/'; then
+            echo "::error::APK contains ML Kit / Google Play Services"
+            exit 1
+          fi
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: gator-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14

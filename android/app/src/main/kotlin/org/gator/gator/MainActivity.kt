@@ -200,6 +200,7 @@ class MainActivity : FlutterFragmentActivity() {
                 }
             }
 
+        ioExecutor.execute { pruneOldSharedCopies() }
         handleShareIntent(intent)
     }
 
@@ -355,19 +356,51 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun copyUriToCache(uri: Uri): String? {
+        // One private directory per shared item so the file keeps its real
+        // name: croc sends the basename, so a "share-<nanos>-" prefix used to
+        // show up in the receiver's file name.
+        val dir = File(File(cacheDir, SHARE_CACHE_DIR), System.nanoTime().toString())
         return try {
             val input = contentResolver.openInputStream(uri) ?: return null
-            val name = queryDisplayName(uri) ?: "shared-${System.currentTimeMillis()}"
-            val safeName = name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-            val outFile = File(cacheDir, "share-${System.nanoTime()}-$safeName")
             input.use { inputStream ->
+                if (!dir.mkdirs() && !dir.isDirectory) return null
+                val name = queryDisplayName(uri) ?: "shared-${System.currentTimeMillis()}"
+                val outFile = File(dir, sanitizeShareName(name))
                 FileOutputStream(outFile).use { output ->
                     inputStream.copyTo(output)
                 }
+                outFile.absolutePath
             }
-            outFile.absolutePath
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not copy shared item", e)
+            // Do not leave a half-written copy behind in the cache.
+            dir.deleteRecursively()
             null
+        }
+    }
+
+    /**
+     * Shared items are copied into the cache and croc reads them from there,
+     * but nothing removed them afterwards, so every shared video stayed on
+     * disk until Android evicted the cache. Drop copies older than a day;
+     * a transfer of that age is long gone, so this never races a live send.
+     */
+    private fun pruneOldSharedCopies() {
+        val cutoff = System.currentTimeMillis() - SHARE_CACHE_MAX_AGE_MS
+        try {
+            File(cacheDir, SHARE_CACHE_DIR).listFiles()?.forEach { entry ->
+                if (entry.lastModified() < cutoff) entry.deleteRecursively()
+            }
+            // Copies made by older builds lived directly in cacheDir.
+            cacheDir.listFiles()?.forEach { entry ->
+                if (entry.isFile && entry.name.startsWith("share-") &&
+                    entry.lastModified() < cutoff
+                ) {
+                    entry.delete()
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not prune shared-file cache", e)
         }
     }
 
@@ -384,6 +417,18 @@ class MainActivity : FlutterFragmentActivity() {
 
     companion object {
         private const val TAG = "GatorMainActivity"
+        private const val SHARE_CACHE_DIR = "shared"
+        private const val SHARE_CACHE_MAX_AGE_MS = 24L * 60 * 60 * 1000
+
+        /** Keep letters in any script (æøå, CJK, ...) but no path separators. */
+        internal fun sanitizeShareName(name: String): String {
+            val cleaned = name.replace(Regex("[^\\p{L}\\p{N}._ ()-]"), "_").trim()
+            return if (cleaned.isEmpty() || cleaned.all { it == '.' }) {
+                "shared-${System.currentTimeMillis()}"
+            } else {
+                cleaned
+            }
+        }
         private const val ABI_CHANNEL = "org.gator.gator/abi"
         private const val CROC_CHANNEL = "org.gator.gator/croc"
         private const val SHARE_METHOD_CHANNEL = "org.gator.gator/share"

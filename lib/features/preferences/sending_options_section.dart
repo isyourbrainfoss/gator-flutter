@@ -22,6 +22,7 @@ class SendingOptionsSection extends ConsumerWidget {
         PreferenceTextField(
           title: 'Default custom transfer code',
           subtitle: 'Optional – leave empty for a random code',
+          hintText: 'Random code',
           value: settings.defaultCode,
           onSubmitted: (value) => notifier.updateSetting('default_code', value),
         ),
@@ -31,25 +32,25 @@ class SendingOptionsSection extends ConsumerWidget {
         ),
         PreferenceSwitch(
           title: 'Zip folder before sending',
-          subtitle: '--zip',
+          subtitle: 'Send a folder as one .zip file (--zip)',
           value: settings.zipFolder,
           onChanged: (value) => notifier.updateSetting('zip_folder', value),
         ),
         PreferenceSwitch(
           title: 'Disable local relay',
-          subtitle: '--no-local',
+          subtitle: 'Skip the direct local-network path; always use a relay (--no-local)',
           value: settings.noLocal,
           onChanged: (value) => notifier.updateSetting('no_local', value),
         ),
         PreferenceSwitch(
           title: 'Disable multiplexing',
-          subtitle: '--no-multi',
+          subtitle: 'Use a single connection; can help on strict networks (--no-multi)',
           value: settings.noMulti,
           onChanged: (value) => notifier.updateSetting('no_multi', value),
         ),
         PreferenceSwitch(
           title: 'Respect .gitignore',
-          subtitle: '--git',
+          subtitle: 'Skip files a folder’s .gitignore excludes (--git)',
           value: settings.git,
           onChanged: (value) => notifier.updateSetting('git', value),
         ),

@@ -21,56 +21,63 @@ class GeneralOptionsSection extends ConsumerWidget {
         const PreferenceSectionHeader('General Options'),
         PreferenceSwitch(
           title: 'Debug mode',
-          subtitle: '--debug',
+          subtitle: 'Log extra croc detail for troubleshooting (--debug)',
           value: settings.debug,
           onChanged: (value) => notifier.updateSetting('debug', value),
         ),
         PreferenceSwitch(
           title: 'Disable compression',
-          subtitle: '--no-compress',
+          subtitle: 'Send files as-is; faster for already-compressed files (--no-compress)',
           value: settings.noCompress,
           onChanged: (value) => notifier.updateSetting('no_compress', value),
         ),
         PreferenceSwitch(
           title: 'Prompt sender and recipient',
-          subtitle: '--ask (the GUI cannot answer croc prompts)',
+          subtitle:
+              'Not recommended: croc would wait for a terminal answer this app '
+              'cannot give (--ask)',
           value: settings.ask,
           onChanged: (value) => notifier.updateSetting('ask', value),
         ),
         PreferenceSwitch(
           title: 'Force local connections',
-          subtitle: '--local',
+          subtitle:
+              'Only connect over the local network, never a relay (--local)',
           value: settings.local,
           onChanged: (value) => notifier.updateSetting('local', value),
         ),
         PreferenceSwitch(
           title: 'Use internal DNS resolver',
-          subtitle: '--internal-dns (recommended on Android)',
+          subtitle: 'Recommended on Android if relays fail to resolve (--internal-dns)',
           value: settings.internalDns,
           onChanged: (value) => notifier.updateSetting('internal_dns', value),
         ),
         PreferenceTextField(
           title: 'Multicast address for local discovery',
           subtitle: 'Leave empty for croc default ($crocDefaultMulticast)',
+          hintText: crocDefaultMulticast,
           value: settings.multicast,
           onSubmitted: (value) => notifier.updateSetting('multicast', value),
         ),
         PreferenceTextField(
-          title: 'Set sender IP if known',
-          subtitle: '--ip',
+          title: 'Sender IP address',
+          subtitle: 'Optional; connect straight to a known sender (--ip)',
+          hintText: 'e.g. 192.168.1.20',
           value: settings.ip,
           onSubmitted: (value) => notifier.updateSetting('ip', value),
         ),
         PreferenceTextField(
           title: 'Throttle upload speed',
-          subtitle: '--throttleUpload, e.g. 500k',
+          subtitle: 'Limit upload speed (--throttleUpload)',
+          hintText: 'No limit (e.g. 500k)',
           value: settings.throttleUpload,
           onSubmitted: (value) =>
               notifier.updateSetting('throttle_upload', value),
         ),
         PreferenceTextField(
           title: 'Transport',
-          subtitle: 'Empty = croc default. auto, derp, or relay (--transport)',
+          subtitle: 'auto, derp, or relay (--transport)',
+          hintText: 'croc default',
           value: settings.transport,
           onSubmitted: (value) => notifier.updateSetting('transport', value),
         ),

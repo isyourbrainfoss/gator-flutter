@@ -6,8 +6,8 @@ import 'package:gator/models/gator_settings.dart';
 import 'package:gator/services/croc_parser.dart';
 
 void main() {
-  test('pins bundled croc 11.5.4', () {
-    expect(crocVersion, '11.5.4');
+  test('pins bundled croc 11.6.5', () {
+    expect(crocVersion, '11.6.5');
   });
 
   group('parseProgressFraction', () {
@@ -332,6 +332,18 @@ void main() {
       expect(mixed!.transferred, '100 kB');
       expect(mixed.total, '153 MB');
       expect(mixed.speed, '8.5 kB/s');
+    });
+
+    test('parses croc 11.6 bundled N/M filename descriptions', () {
+      final info = parseProgressLine(
+        '2/3 photo.jpg  45% |█████████           | (4.5/10 MB, 2.1 MB/s) [2s:3s]',
+      );
+      expect(info, isNotNull);
+      expect(info!.fraction, closeTo(0.45, 0.001));
+      expect(info.fileName, 'photo.jpg');
+      expect(info.fileIndex, 2);
+      expect(info.fileCount, 3);
+      expect(info.speed, '2.1 MB/s');
     });
 
     test('parses hashing, uploading, and downloading descriptions', () {

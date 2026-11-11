@@ -28,6 +28,8 @@ final _speedRe = RegExp(
 final _etaRe = RegExp(r'\[([^:\]]+):([^\]]+)\]');
 final _fileCountRe = RegExp(r'\s(\d+)/(\d+)\s*$');
 final _nFilesRe = RegExp(r'^(\d+)\s+files$', caseSensitive: false);
+// croc 11.6 bundled multi-file transfers share one bar described `N/M name`.
+final _leadingFileCountRe = RegExp(r'^(\d+)/(\d+)\s+(.*)$');
 
 /// Parsed croc progressbar line (v10/v11 progressbar v3).
 class CrocProgressInfo {
@@ -272,6 +274,12 @@ CrocProgressInfo? parseProgressLine(String line) {
   if (countMatch != null) {
     fileIndex = int.tryParse(countMatch.group(1)!);
     fileCount = int.tryParse(countMatch.group(2)!);
+  }
+  final leadingCount = _leadingFileCountRe.firstMatch(name);
+  if (leadingCount != null) {
+    fileIndex ??= int.tryParse(leadingCount.group(1)!);
+    fileCount ??= int.tryParse(leadingCount.group(2)!);
+    name = leadingCount.group(3)!.trim();
   }
   final nFiles = _nFilesRe.firstMatch(name);
   if (nFiles != null) {

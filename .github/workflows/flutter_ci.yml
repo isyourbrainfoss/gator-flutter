@@ -35,8 +35,8 @@ jobs:
 
       - name: Start local croc relay (for test/croc_e2e_test.dart)
         env:
-          CROC_VERSION: 11.5.4
-          CROC_SHA256: 577f2c4170fac3f8ab244e325cdeea5644788e1cd7620f592a5d365ee349d556
+          CROC_VERSION: 11.6.5
+          CROC_SHA256: 01bbbb4eafe12c01ddb84ddebf556c35ea9989a976f4abc7e72933c2a6e5e61e
         run: |
           set -euo pipefail
           TARBALL="croc_v${CROC_VERSION}_Linux-64bit.tar.gz"

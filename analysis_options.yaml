@@ -13,6 +13,13 @@ analyzer:
   # Debug / build helper scripts are not part of the app surface.
   exclude:
     - tool/**
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
 
 linter:
   # The lint rules applied to this project can be customized in the

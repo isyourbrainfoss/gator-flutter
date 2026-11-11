@@ -131,7 +131,10 @@ void main() {
     final tmp = await Directory.systemTemp.createTemp('gator-e2e-');
     addTearDown(() => tmp.delete(recursive: true));
     final receiver = CrocTransferService(crocPath: croc!);
-    // croc waits for a sender for a long time; cancel like the user would.
+    // Older croc (<= 11.5) waits for a sender for a long time, so cancel like
+    // the user would. croc 11.6.x gives up by itself (exit 1) after ~5 s,
+    // usually before this timer fires. Either outcome is fine; what matters is
+    // that no text and no "Complete" is reported.
     Timer(const Duration(seconds: 8), receiver.cancel);
     final events = await run(
       receiver,
@@ -142,7 +145,17 @@ void main() {
         filesBefore: const {},
       ),
     );
-    expect(receiver.canceled, isTrue);
+    final exitCodes = events
+        .whereType<CrocFinishedEvent>()
+        .map((e) => e.exitCode)
+        .toList();
+    expect(
+      receiver.canceled || exitCodes.any((c) => c != 0),
+      isTrue,
+      reason:
+          'expected a cancel or a non-zero croc exit, got '
+          'canceled=${receiver.canceled} exitCodes=$exitCodes',
+    );
     expect(events.whereType<CrocTextReceivedEvent>(), isEmpty);
     expect(events.whereType<CrocTransferCompleteEvent>(), isEmpty);
   }, skip: skip);

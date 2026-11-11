@@ -12,9 +12,8 @@ class PreferenceSectionHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
       child: Text(
         title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            ),
+        style: Theme.of(context).textTheme.titleSmall
+            ?.copyWith(color: Theme.of(context).colorScheme.primary),
       ),
     );
   }
@@ -30,6 +29,7 @@ class PreferenceTextField extends StatefulWidget {
     this.subtitle,
     this.obscure = false,
     this.keyboardType,
+    this.hintText,
   });
 
   final String title;
@@ -38,6 +38,10 @@ class PreferenceTextField extends StatefulWidget {
   final void Function(String) onSubmitted;
   final bool obscure;
   final TextInputType? keyboardType;
+
+  /// Shown inside an empty field so an unset option reads as "default"
+  /// instead of a blank line.
+  final String? hintText;
 
   @override
   State<PreferenceTextField> createState() => _PreferenceTextFieldState();
@@ -94,7 +98,10 @@ class _PreferenceTextFieldState extends State<PreferenceTextField> {
             focusNode: _focus,
             obscureText: widget.obscure,
             keyboardType: widget.keyboardType,
-            decoration: const InputDecoration(isDense: true),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: widget.hintText,
+            ),
             onSubmitted: (_) => _save(),
             onEditingComplete: _save,
             onTapOutside: (_) {
@@ -162,16 +169,11 @@ class PreferenceHashDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       title: const Text('Hash algorithm'),
-      subtitle: const Text('--hash'),
+      subtitle: const Text('Checksum used to verify files (--hash)'),
       trailing: DropdownButton<String>(
         value: _dropdownValue,
         items: _options.entries
-            .map(
-              (e) => DropdownMenuItem(
-                value: e.key,
-                child: Text(e.value),
-              ),
-            )
+            .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
             .toList(),
         onChanged: (v) {
           if (v != null) onChanged(v);

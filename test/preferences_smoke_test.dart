@@ -18,8 +18,9 @@ void main() {
   });
 
   group('PreferencesPage smoke', () {
-    testWidgets('renders GTK-parity section headers and key settings',
-        (tester) async {
+    testWidgets('renders GTK-parity section headers and key settings', (
+      tester,
+    ) async {
       await tester.binding.setSurfaceSize(const Size(800, 5000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -31,8 +32,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Automatically accept incoming transfers'),
-          findsOneWidget);
+      expect(
+        find.text('Automatically accept incoming transfers'),
+        findsOneWidget,
+      );
       expect(find.text('Show advanced options'), findsOneWidget);
       expect(find.text('Relay and Proxy'), findsNothing);
       expect(find.text('SOCKS5 proxy'), findsNothing);
@@ -46,6 +49,14 @@ void main() {
       expect(find.text('SOCKS5 proxy'), findsOneWidget);
       expect(find.textContaining('HTTP proxy'), findsOneWidget);
       expect(find.text('Debug mode'), findsOneWidget);
+
+      // Advanced rows explain themselves instead of showing a bare croc flag,
+      // and empty text fields say what an empty value means.
+      expect(find.text('--debug'), findsNothing);
+      expect(find.text('--zip'), findsNothing);
+      expect(find.textContaining('(--debug)'), findsOneWidget);
+      expect(find.text('Random code'), findsOneWidget);
+      expect(find.text('croc public relays'), findsOneWidget);
     });
   });
 }

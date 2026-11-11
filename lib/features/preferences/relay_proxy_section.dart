@@ -18,8 +18,8 @@ class RelayProxySection extends ConsumerWidget {
         const PreferenceSectionHeader('Relay and Proxy'),
         PreferenceTextField(
           title: 'Relay address',
-          subtitle:
-              'Empty = croc public pool (the code chooses the relay). --relay',
+          subtitle: 'Leave empty to use croc’s public relays (--relay)',
+          hintText: 'croc public relays',
           value: settings.relay,
           onSubmitted: (v) =>
               ref.read(settingsProvider.notifier).updateSetting('relay', v),
@@ -27,6 +27,7 @@ class RelayProxySection extends ConsumerWidget {
         PreferenceTextField(
           title: 'IPv6 relay address',
           subtitle: 'Optional; leave empty unless you need IPv6 relay',
+          hintText: 'Not set',
           value: settings.relay6,
           onSubmitted: (v) =>
               ref.read(settingsProvider.notifier).updateSetting('relay6', v),
@@ -34,6 +35,7 @@ class RelayProxySection extends ConsumerWidget {
         PreferenceTextField(
           title: 'Relay password',
           subtitle: 'Leave empty for croc’s default relay password (--pass)',
+          hintText: 'croc default',
           value: settings.pass,
           obscure: true,
           onSubmitted: (v) =>
@@ -41,12 +43,16 @@ class RelayProxySection extends ConsumerWidget {
         ),
         PreferenceTextField(
           title: 'SOCKS5 proxy',
+          subtitle: 'Optional (--socks5)',
+          hintText: 'e.g. 127.0.0.1:9050',
           value: settings.socks5,
           onSubmitted: (v) =>
               ref.read(settingsProvider.notifier).updateSetting('socks5', v),
         ),
         PreferenceTextField(
-          title: 'HTTP proxy (--connect)',
+          title: 'HTTP proxy',
+          subtitle: 'Optional (--connect)',
+          hintText: 'e.g. proxy.example:8080',
           value: settings.connect,
           onSubmitted: (v) =>
               ref.read(settingsProvider.notifier).updateSetting('connect', v),

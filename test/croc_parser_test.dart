@@ -6,8 +6,14 @@ import 'package:gator/models/gator_settings.dart';
 import 'package:gator/services/croc_parser.dart';
 
 void main() {
-  test('pins bundled croc 11.6.5', () {
-    expect(crocVersion, '11.6.5');
+  test('pins bundled croc 11.6.6', () {
+    expect(crocVersion, '11.6.6');
+    expect(crocAboutLabel(), 'croc v11.6.6');
+    expect(crocAboutLabel(''), 'croc v11.6.6');
+    expect(crocAboutLabel('croc version 11.6.6'), 'croc v11.6.6');
+    expect(crocAboutLabel('croc version v11.6.6\n'), 'croc v11.6.6');
+    expect(crocAboutLabel('dev'), 'croc v11.6.6');
+    expect(crocAboutLabel('croc version 9.0.0'), 'croc v9.0.0');
   });
 
   group('parseProgressFraction', () {
@@ -145,6 +151,29 @@ void main() {
         'acid-pink-fostered-succeeding',
       );
       expect(extractCrocCodeFromLine('On the other computer, run:'), isNull);
+    });
+
+    test('strips POSIX single quotes from croc 11.6.6 instruction tokens', () {
+      expect(extractCrocCodeFromLine("  croc 'foo&bar'"), 'foo&bar');
+      expect(
+        extractCrocCodeFromLine(
+          "  croc --pass 'foo&bar' acid-pink-fostered-succeeding",
+        ),
+        'acid-pink-fostered-succeeding',
+      );
+      expect(
+        extractCrocCodeFromLine(
+          "  croc --relay '[::1]:9009' 5015-lucas-valid-balance",
+        ),
+        '5015-lucas-valid-balance',
+      );
+      expect(extractCrocCodeFromLine(r"  croc 'it'\''s'"), "it's");
+      expect(
+        extractCrocCodeFromLine(
+          "On the other computer, run: croc --pass 'foo&bar' 'my-code'",
+        ),
+        'my-code',
+      );
     });
   });
 

@@ -4,8 +4,27 @@ library;
 const String appId = 'org.gator.Gator';
 const String appName = 'Gator';
 // appVersion removed: prefer runtime value from appVersionProvider (package_info_plus).
-const String crocVersion = '11.6.5';
+const String crocVersion = '11.6.6';
 const String crocBinary = 'croc';
+
+/// `croc --version` prints `croc version 11.6.6` (optional leading v).
+final RegExp _reportedCrocVersionRe = RegExp(
+  r'\bversion\s+v?(\d+\.\d+\.\d+)\b',
+  caseSensitive: false,
+);
+
+/// Release from raw `croc --version` output, or null when it is not a release.
+String? reportedCrocVersion(String? output) {
+  if (output == null) return null;
+  return _reportedCrocVersionRe.firstMatch(output)?.group(1);
+}
+
+/// About label, e.g. `croc v11.6.6`. Uses [reported] when it parses, else the pin.
+String crocAboutLabel([String? reported]) {
+  final version = reportedCrocVersion(reported) ?? crocVersion;
+  return 'croc v$version';
+}
+
 const String codeIsPrefix = 'Code is: ';
 
 const int defaultPort = 0;

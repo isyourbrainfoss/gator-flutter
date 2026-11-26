@@ -7,7 +7,10 @@ import 'package:gator/features/receive/receive_page.dart';
 import 'package:gator/features/send/send_notifier.dart';
 import 'package:gator/features/send/send_page.dart';
 import 'package:gator/features/shell/gator_shell.dart';
+import 'package:gator/providers/app_version_provider.dart';
+import 'package:gator/providers/croc_provider.dart';
 import 'package:gator/providers/settings_provider.dart';
+import 'package:gator/services/croc_binary_locator.dart';
 import 'package:gator/services/settings_repository.dart';
 
 void main() {
@@ -141,5 +144,43 @@ void main() {
       expect(find.byType(Banner), findsNothing);
       expect(find.byIcon(Icons.more_vert), findsOneWidget);
     });
+
+    testWidgets('About shows the bundled croc version', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsRepositoryProvider.overrideWithValue(repo),
+            appVersionProvider.overrideWith((ref) async => '1.5.17+18'),
+            crocBinaryLocatorProvider.overrideWithValue(
+              _FixedCrocVersion('croc version 11.6.6'),
+            ),
+          ],
+          child: const MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: GatorShell(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('About'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('croc v11.6.6'), findsOneWidget);
+      expect(find.text('GPL-3.0-or-later'), findsOneWidget);
+      expect(find.textContaining('GPL-3.0-or-later · croc'), findsNothing);
+      expect(find.text('1.5.17+18'), findsOneWidget);
+    });
   });
+}
+
+class _FixedCrocVersion extends CrocBinaryLocator {
+  _FixedCrocVersion(this.reported);
+
+  final String? reported;
+
+  @override
+  Future<String?> verify() async => reported;
 }

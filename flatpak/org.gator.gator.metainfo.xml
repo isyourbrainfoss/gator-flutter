@@ -26,7 +26,7 @@
   <releases>
     <release version="1.5.17" date="2026-11-11">
       <description>
-        <p>Bundled croc updated to 11.6.5.</p>
+        <p>Bundled croc updated to 11.6.6.</p>
         <p>Linux transfer fixes: receiving works again, custom send codes work, received text is shown, failed transfers no longer show as Complete, and croc's "newer version" notice is no longer mistaken for the code. The relay password and transfer code are no longer visible on the command line.</p>
       </description>
     </release>

@@ -15,6 +15,7 @@ import 'package:gator/features/send/send_notifier.dart';
 import 'package:gator/features/shell/help_page.dart';
 import 'package:gator/models/gator_settings.dart';
 import 'package:gator/providers/app_version_provider.dart';
+import 'package:gator/providers/croc_provider.dart';
 import 'package:gator/features/receive/receive_page.dart';
 import 'package:gator/features/send/send_page.dart';
 import 'package:gator/providers/settings_provider.dart';
@@ -215,7 +216,7 @@ class _GatorShellState extends ConsumerState<GatorShell>
                         MaterialPageRoute(builder: (_) => const HelpPage()),
                       );
                     case 'about':
-                      _showAbout(context);
+                      unawaited(_showAbout(context));
                   }
                 },
                 itemBuilder: (context) => [
@@ -266,16 +267,32 @@ class _GatorShellState extends ConsumerState<GatorShell>
     );
   }
 
-  void _showAbout(BuildContext context) {
-    final versionAsync = ref.read(appVersionProvider);
-    final version = versionAsync.value;
+  Future<void> _showAbout(BuildContext context) async {
+    String? version;
+    try {
+      version = await ref.read(appVersionProvider.future);
+    } catch (e) {
+      GatorLog.d('About', 'app version unavailable: $e');
+    }
+    String? reported;
+    try {
+      reported = await ref.read(crocBinaryLocatorProvider).verify();
+    } catch (e) {
+      GatorLog.d('About', 'croc --version failed: $e');
+    }
+    if (!context.mounted) return;
 
     showAboutDialog(
       context: context,
       applicationName: appName,
       applicationVersion: version,
-      applicationLegalese: 'GPL-3.0-or-later · croc $crocVersion',
+      applicationLegalese: 'GPL-3.0-or-later',
       children: [
+        Text(
+          crocAboutLabel(reported),
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
         const Text(
           'Send: add files → Start Transfer → share the code or QR.\n'
           'Receive: enter or paste that code → Start Receiving.',

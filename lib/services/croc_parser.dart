@@ -118,7 +118,9 @@ String? extractCrocCodeFromLine(String line) {
         }
         continue;
       }
-      code = token;
+      // croc 11.6.6 single-quotes a relay, password, or code only when it
+      // contains shell metacharacters. Generated codes stay unquoted.
+      code = _stripPosixSingleQuotes(token);
     }
     if (code != null &&
         code.isNotEmpty &&
@@ -127,6 +129,35 @@ String? extractCrocCodeFromLine(String line) {
     }
   }
   return null;
+}
+
+/// Drop POSIX single quotes from one instruction token.
+/// `'foo&bar'` → `foo&bar`, `'it'\''s'` → `it's`. Unquoted tokens are unchanged.
+String _stripPosixSingleQuotes(String token) {
+  if (token.length < 2 || !token.startsWith("'")) return token;
+  final buf = StringBuffer();
+  var i = 0;
+  while (i < token.length) {
+    if (token[i] == "'") {
+      i++;
+      final end = token.indexOf("'", i);
+      if (end < 0) {
+        buf.write(token.substring(i));
+        break;
+      }
+      buf.write(token.substring(i, end));
+      i = end + 1;
+      continue;
+    }
+    if (token[i] == '\\' && i + 1 < token.length && token[i + 1] == "'") {
+      buf.write("'");
+      i += 2;
+      continue;
+    }
+    buf.write(token[i]);
+    i++;
+  }
+  return buf.toString();
 }
 
 /// croc subcommands that can follow `croc` in a hint like "Run: croc update";
